@@ -25,8 +25,7 @@ if not DEBUG and not SECRET_KEY:
     from django.core.exceptions import ImproperlyConfigured
     raise ImproperlyConfigured('Set the SECRET_KEY environment variable for production')
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
-
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS_DEV', default=[])
 
 # Application definition
 
