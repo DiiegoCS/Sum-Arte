@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build:
@@ -8,6 +6,8 @@ services:
       - "8000:8000"
     env_file:
       - /Back/core/.env
+    volumes: # --- Volúmnes para desarrollo --- (carga cambios sin rebuild)
+     - ./Back:/app
 
   frontend:
     build:
