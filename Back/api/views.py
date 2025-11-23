@@ -6,6 +6,7 @@ from .serializers import (ProyectoSerializer, OrganizacionSerializer,UsuarioSeri
                           TransaccionSerializer, EvidenciaSerializer, TransaccionEvidenciaSerializer,
                           LogTransaccionSerializer, ItemPresupuestarioSerializer, SubitemPresupuestarioSerializer, 
                           RolSerializer)
+from rest_framework.permissions import AllowAny
 
 class OrganizacionViewSet(viewsets.ModelViewSet):
     queryset = Organizacion.objects.all()
@@ -39,6 +40,8 @@ class ProveedorViewSet(viewsets.ModelViewSet):
 class TransaccionViewSet(viewsets.ModelViewSet):
     queryset = Transaccion.objects.all()
     serializer_class = TransaccionSerializer
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
 class EvidenciaViewSet(viewsets.ModelViewSet):
     queryset = Evidencia.objects.all()
@@ -53,8 +56,15 @@ class LogTransaccionViewSet(viewsets.ModelViewSet):
     serializer_class = LogTransaccionSerializer
 
 class ItemPresupuestarioViewSet(viewsets.ModelViewSet):
-    queryset = Item_Presupuestario.objects.all()
     serializer_class = ItemPresupuestarioSerializer
+    def get_queryset(self):
+        queryset = Item_Presupuestario.objects.all()
+        # Busca el parámetro 'proyecto' en la URL
+        proyecto_id = self.request.query_params.get('proyecto')
+        # Si existe, filtra
+        if proyecto_id is not None:
+            queryset = queryset.filter(proyecto=proyecto_id)
+        return queryset
 
 class SubitemPresupuestarioViewSet(viewsets.ModelViewSet):
     queryset = Subitem_Presupuestario.objects.all()
