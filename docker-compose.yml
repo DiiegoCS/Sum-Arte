@@ -1,0 +1,19 @@
+services:
+  backend:
+    build:
+      context: ./Back
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./Back/core/.env
+    volumes: # --- Volúmnes para desarrollo --- (carga cambios sin rebuild)
+     - ./Back:/app
+
+  frontend:
+    build:
+      context: ./Front
+    ports:
+      - "3000:80"
+    volumes: 
+      - ./Front:/app
+      - /app/node_modules

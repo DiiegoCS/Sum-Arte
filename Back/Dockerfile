@@ -1,0 +1,23 @@
+# 1. IMAGEN BASE
+FROM python:3.13
+
+# 2. VARIABLES DE ENTORNO
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# 3. DIRECTORIO DE TRABAJO
+WORKDIR /app
+
+# 4. INSTALAR DEPENDENCIAS
+COPY requirements.txt .
+
+RUN pip install -r requirements.txt
+
+# 5. COPIAR EL CÓDIGO
+COPY . .
+
+# 6. EXPONER EL PUERTO
+EXPOSE 8000
+
+# 7. COMANDO DE INICIO
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

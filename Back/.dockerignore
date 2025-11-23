@@ -1,0 +1,10 @@
+# Ignora el entorno virtual de Python
+/myvenv/
+/Lib/
+
+# Ignora la base de datos de SQLite
+*.sqlite3
+
+# Ignora los archivos de caché de Python
+__pycache__/
+*.pyc

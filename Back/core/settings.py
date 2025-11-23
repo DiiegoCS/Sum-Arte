@@ -191,3 +191,5 @@ if not DEBUG:
             }
         }
     DATABASES['default']['ATOMIC_REQUESTS'] = True
+
+AUTH_USER_MODEL = 'api.Usuario'

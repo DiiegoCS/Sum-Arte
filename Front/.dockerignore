@@ -1,0 +1,6 @@
+# Ignora la carpeta de dependencias
+/node_modules
+
+# Ignora los archivos de caché y logs
+.npm/
+npm-debug.log
