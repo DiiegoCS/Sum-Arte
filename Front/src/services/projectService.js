@@ -1,15 +1,15 @@
 /**
- * Project service for Sum-Arte frontend.
+ * Servicio de proyectos para el frontend de Sum-Arte.
  * 
- * Handles all project-related API calls.
+ * Gestiona todas las llamadas a la API relacionadas con proyectos.
  */
 
 import api from './api';
 
 /**
- * Get all projects for the current user.
+ * Obtiene todos los proyectos asociados al usuario actual.
  * 
- * @returns {Promise<Array>} List of projects
+ * @returns {Promise<Array>} Devuelve una lista de proyectos
  */
 export const getProjects = async () => {
   const response = await api.get('/proyectos/');
@@ -17,10 +17,10 @@ export const getProjects = async () => {
 };
 
 /**
- * Get a specific project by ID.
+ * Obtiene la información de un proyecto específico por ID.
  * 
- * @param {number} projectId - Project ID
- * @returns {Promise<Object>} Project data
+ * @param {number} projectId - ID del proyecto
+ * @returns {Promise<Object>} Devuelve los datos del proyecto
  */
 export const getProject = async (projectId) => {
   const response = await api.get(`/proyectos/${projectId}/`);
@@ -28,10 +28,10 @@ export const getProject = async (projectId) => {
 };
 
 /**
- * Create a new project.
+ * Crea un nuevo proyecto.
  * 
- * @param {Object} projectData - Project data
- * @returns {Promise<Object>} Created project
+ * @param {Object} projectData - Datos del proyecto a crear
+ * @returns {Promise<Object>} Devuelve el proyecto creado
  */
 export const createProject = async (projectData) => {
   const response = await api.post('/proyectos/', projectData);
@@ -39,11 +39,11 @@ export const createProject = async (projectData) => {
 };
 
 /**
- * Update a project.
+ * Actualiza los datos de un proyecto existente.
  * 
- * @param {number} projectId - Project ID
- * @param {Object} projectData - Updated project data
- * @returns {Promise<Object>} Updated project
+ * @param {number} projectId - ID del proyecto a actualizar
+ * @param {Object} projectData - Datos actualizados del proyecto
+ * @returns {Promise<Object>} Devuelve el proyecto actualizado
  */
 export const updateProject = async (projectId, projectData) => {
   const response = await api.patch(`/proyectos/${projectId}/`, projectData);
@@ -51,10 +51,10 @@ export const updateProject = async (projectId, projectData) => {
 };
 
 /**
- * Get budget items for a project.
+ * Obtiene los ítems presupuestarios asociados a un proyecto.
  * 
- * @param {number} projectId - Project ID
- * @returns {Promise<Array>} List of budget items
+ * @param {number} projectId - ID del proyecto
+ * @returns {Promise<Array>} Devuelve una lista de ítems presupuestarios
  */
 export const getBudgetItems = async (projectId) => {
   const response = await api.get(`/items-presupuestarios/?proyecto=${projectId}`);
@@ -62,10 +62,10 @@ export const getBudgetItems = async (projectId) => {
 };
 
 /**
- * Get subitems for a budget item.
+ * Obtiene los subítems asociados a un ítem presupuestario.
  * 
- * @param {number} itemId - Budget item ID
- * @returns {Promise<Array>} List of subitems
+ * @param {number} itemId - ID del ítem presupuestario
+ * @returns {Promise<Array>} Devuelve una lista de subítems
  */
 export const getSubitems = async (itemId) => {
   const response = await api.get(`/subitems-presupuestarios/?item_presupuesto=${itemId}`);
@@ -73,9 +73,9 @@ export const getSubitems = async (itemId) => {
 };
 
 /**
- * Get dashboard metrics for all projects.
+ * Obtiene las métricas del dashboard para todos los proyectos.
  * 
- * @returns {Promise<Object>} Dashboard metrics
+ * @returns {Promise<Object>} Devuelve las métricas del dashboard
  */
 export const getDashboardMetrics = async () => {
   const response = await api.get('/dashboard/metrics/');
@@ -83,10 +83,10 @@ export const getDashboardMetrics = async () => {
 };
 
 /**
- * Get metrics for a specific project.
+ * Obtiene las métricas específicas de un proyecto.
  * 
- * @param {number} projectId - Project ID
- * @returns {Promise<Object>} Project metrics
+ * @param {number} projectId - ID del proyecto
+ * @returns {Promise<Object>} Devuelve las métricas del proyecto
  */
 export const getProjectMetrics = async (projectId) => {
   const response = await api.get(`/dashboard/proyecto/${projectId}/metrics/`);
