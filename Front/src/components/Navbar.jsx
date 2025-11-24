@@ -1,7 +1,7 @@
 /**
- * Navigation bar component for Sum-Arte.
+ * Barra de navegación para Sum-Arte.
  * 
- * Displays navigation links and user information with logout functionality.
+ * Muestra enlaces de navegación y información del usuario con funcionalidad de cierre de sesión.
  */
 
 import React from 'react';
@@ -9,7 +9,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 /**
- * Navbar component.
+ * Componente Navbar.
  */
 const Navbar = () => {
   const { user, logout } = useAuth();

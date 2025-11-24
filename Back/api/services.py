@@ -12,7 +12,8 @@ from django.db.models import Sum, Q, F
 from django.core.exceptions import ValidationError
 from .models import (
     Transaccion, Item_Presupuestario, Subitem_Presupuestario,
-    Proyecto, Log_transaccion, Evidencia, Transaccion_Evidencia
+    Proyecto, Log_transaccion, Evidencia, Transaccion_Evidencia,
+    ACCION_LOG_APROBACION, ACCION_LOG_RECHAZO, ACCION_LOG_CREACION
 )
 from .validators import (
     validar_saldo_disponible, validar_duplicidad, validar_categoria_gasto,
@@ -26,8 +27,7 @@ from .exceptions import (
     RendicionIncompletaException
 )
 from .constants import (
-    ESTADO_PENDIENTE, ESTADO_APROBADO, ESTADO_RECHAZADO,
-    ACCION_LOG_APROBACION, ACCION_LOG_RECHAZO, ACCION_LOG_CREACION
+    ESTADO_PENDIENTE, ESTADO_APROBADO, ESTADO_RECHAZADO
 )
 
 

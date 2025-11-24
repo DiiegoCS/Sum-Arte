@@ -1,8 +1,9 @@
 /**
- * Dashboard page for Sum-Arte.
+ * Página de dashboard para Sum-Arte.
  * 
- * Displays executive dashboard with budget execution metrics,
- * expenses by item, and project summaries using charts.
+ * Muestra el dashboard ejecutivo con métricas de ejecución presupuestaria,
+ * egresos por ítem y resumenes de proyectos usando gráficos.
+ * También permite la navegación a la página de registro de gastos.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -25,7 +26,7 @@ import {
 import ProjectCard from '../components/ProjectCard';
 
 /**
- * Dashboard component.
+ * Componente Dashboard.
  */
 const Dashboard = () => {
   const [metrics, setMetrics] = useState(null);
@@ -43,11 +44,16 @@ const Dashboard = () => {
         getDashboardMetrics(),
         getProjects(),
       ]);
+      
+      // Asegurar que los datos sean arrays
       setMetrics(metricsData);
-      setProyectos(proyectosData);
+      setProyectos(Array.isArray(proyectosData) ? proyectosData : []);
     } catch (error) {
       toast.error('Error al cargar los datos del dashboard');
       console.error('Error:', error);
+      // Establecer valores por defecto en caso de error
+      setMetrics(null);
+      setProyectos([]);
     } finally {
       setLoading(false);
     }
@@ -73,15 +79,23 @@ const Dashboard = () => {
     );
   }
 
-  // Prepare data for charts
-  const gastosPorItemData = metrics.gastos_por_item.slice(0, 10).map(item => ({
-    name: item.item.length > 20 ? item.item.substring(0, 20) + '...' : item.item,
-    monto: item.monto,
+  // Prepara los datos para los gráficos
+  // Asegurar que gastos_por_item sea un array
+  const gastosPorItem = Array.isArray(metrics.gastos_por_item) 
+    ? metrics.gastos_por_item 
+    : [];
+  const gastosPorItemData = gastosPorItem.slice(0, 10).map(item => ({
+    name: item.item && item.item.length > 20 ? item.item.substring(0, 20) + '...' : (item.item || 'Sin nombre'),
+    monto: item.monto || 0,
   }));
 
-  const proyectosData = metrics.proyectos.map(proyecto => ({
-    name: proyecto.nombre.length > 15 ? proyecto.nombre.substring(0, 15) + '...' : proyecto.nombre,
-    ejecutado: proyecto.porcentaje_ejecutado,
+  // Asegurar que proyectos sea un array
+  const proyectosMetrics = Array.isArray(metrics.proyectos) 
+    ? metrics.proyectos 
+    : [];
+  const proyectosData = proyectosMetrics.map(proyecto => ({
+    name: proyecto.nombre && proyecto.nombre.length > 15 ? proyecto.nombre.substring(0, 15) + '...' : (proyecto.nombre || 'Sin nombre'),
+    ejecutado: proyecto.porcentaje_ejecutado || 0,
   }));
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
@@ -97,14 +111,14 @@ const Dashboard = () => {
         </Link>
       </div>
 
-      {/* Summary Cards */}
+      {/* Tarjetas de resumen */}
       <div className="row mb-4">
         <div className="col-md-3">
           <div className="card text-bg-primary">
             <div className="card-body">
               <h6 className="card-subtitle mb-2">Presupuesto Total</h6>
               <h3 className="card-title">
-                ${metrics.resumen_general.presupuesto_total.toLocaleString('es-CL')}
+                ${(metrics.resumen_general?.presupuesto_total || 0).toLocaleString('es-CL')}
               </h3>
             </div>
           </div>
@@ -114,7 +128,7 @@ const Dashboard = () => {
             <div className="card-body">
               <h6 className="card-subtitle mb-2">Monto Ejecutado</h6>
               <h3 className="card-title">
-                ${metrics.resumen_general.monto_ejecutado.toLocaleString('es-CL')}
+                ${(metrics.resumen_general?.monto_ejecutado || 0).toLocaleString('es-CL')}
               </h3>
             </div>
           </div>
@@ -124,7 +138,7 @@ const Dashboard = () => {
             <div className="card-body">
               <h6 className="card-subtitle mb-2">Monto Disponible</h6>
               <h3 className="card-title">
-                ${metrics.resumen_general.monto_disponible.toLocaleString('es-CL')}
+                ${(metrics.resumen_general?.monto_disponible || 0).toLocaleString('es-CL')}
               </h3>
             </div>
           </div>
@@ -134,14 +148,14 @@ const Dashboard = () => {
             <div className="card-body">
               <h6 className="card-subtitle mb-2">% Ejecutado</h6>
               <h3 className="card-title">
-                {metrics.resumen_general.porcentaje_ejecutado.toFixed(1)}%
+                {(metrics.resumen_general?.porcentaje_ejecutado || 0).toFixed(1)}%
               </h3>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Charts Row */}
+      {/* Fila de gráficos */}
       <div className="row mb-4">
         <div className="col-md-6">
           <div className="card">
@@ -172,9 +186,9 @@ const Dashboard = () => {
                 <PieChart>
                   <Pie
                     data={[
-                      { name: 'En Rendición', value: metrics.estado_rendiciones.en_rendicion },
-                      { name: 'Completados', value: metrics.estado_rendiciones.completados },
-                      { name: 'Activos', value: metrics.estado_rendiciones.activos },
+                      { name: 'En Rendición', value: metrics.estado_rendiciones?.en_rendicion || 0 },
+                      { name: 'Completados', value: metrics.estado_rendiciones?.completados || 0 },
+                      { name: 'Activos', value: metrics.estado_rendiciones?.activos || 0 },
                     ]}
                     cx="50%"
                     cy="50%"
@@ -197,7 +211,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Projects List */}
+      {/* Lista de proyectos */}
       <div className="row">
         <div className="col-12">
           <div className="card">
@@ -206,9 +220,13 @@ const Dashboard = () => {
             </div>
             <div className="card-body">
               <div className="d-flex flex-wrap justify-content-center">
-                {proyectos.map((proyecto) => (
-                  <ProjectCard project={proyecto} key={proyecto.id} />
-                ))}
+                {Array.isArray(proyectos) && proyectos.length > 0 ? (
+                  proyectos.map((proyecto) => (
+                    <ProjectCard project={proyecto} key={proyecto.id} />
+                  ))
+                ) : (
+                  <p className="text-muted">No hay proyectos disponibles</p>
+                )}
               </div>
             </div>
           </div>

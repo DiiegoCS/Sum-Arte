@@ -1,8 +1,8 @@
 /**
- * Register Expense page for Sum-Arte.
- * 
- * Complete form for registering expenses with all required fields,
- * provider selection/creation, evidence upload, and budget item selection.
+ * Página para registrar un gasto en Sum-Arte.
+ *
+ * El formulario permite registrar un gasto con todos los campos requeridos,
+ * seleccionar o crear un proveedor, adjuntar evidencias y elegir ítems presupuestarios.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -10,22 +10,23 @@ import { useNavigate } from 'react-router-dom';
 import { getProjects, getBudgetItems, getSubitems } from '../services/projectService';
 import { createTransaction } from '../services/transactionService';
 import { uploadEvidence, linkEvidenceToTransaction } from '../services/evidenceService';
+import { createProvider } from '../services/providerService';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 /**
- * RegisterExpense component.
+ * Componente para registrar un gasto.
  */
 const RegisterExpense = () => {
   const navigate = useNavigate();
-  
-  // Form state
+
+  // Estado del formulario
   const [proyectos, setProyectos] = useState([]);
   const [proyectoSeleccionado, setProyectoSeleccionado] = useState(null);
   const [itemsPresupuestarios, setItemsPresupuestarios] = useState([]);
   const [subitemsPresupuestarios, setSubitemsPresupuestarios] = useState([]);
   const [proveedores, setProveedores] = useState([]);
-  
+
   const [formData, setFormData] = useState({
     proyecto: '',
     proveedor: '',
@@ -43,127 +44,180 @@ const RegisterExpense = () => {
     numero_cuenta_bancaria: '',
     numero_operacion_bancaria: '',
   });
-  
+
   const [evidencias, setEvidencias] = useState([]);
   const [loading, setLoading] = useState(false);
   const [crearNuevoProveedor, setCrearNuevoProveedor] = useState(false);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    loadInitialData();
+    cargarDatosIniciales();
   }, []);
 
   useEffect(() => {
     if (formData.proyecto) {
-      loadBudgetItems(formData.proyecto);
+      cargarItemsPresupuestarios(formData.proyecto);
     }
   }, [formData.proyecto]);
 
   useEffect(() => {
     if (formData.item_presupuestario) {
-      loadSubitems(formData.item_presupuestario);
+      cargarSubitems(formData.item_presupuestario);
     }
   }, [formData.item_presupuestario]);
 
-  const loadInitialData = async () => {
+  /**
+   * Carga los proyectos disponibles al momento de montar el componente.
+   */
+  const cargarDatosIniciales = async () => {
     try {
       const proyectosData = await getProjects();
-      setProyectos(proyectosData);
-      
-      // Load providers (you'll need to create a provider service)
-      // For now, we'll handle it in the form
+      // Asegurar que sea un array
+      setProyectos(Array.isArray(proyectosData) ? proyectosData : []);
+
+      // En esta sección se cargarían proveedores (se debe implementar el servicio de proveedores)
+      // Por ahora, el formulario los gestiona manualmente.
     } catch (error) {
-      toast.error('Error al cargar los datos iniciales');
+      toast.error('Ha ocurrido un error al cargar los datos iniciales');
+      console.error('Error al cargar datos iniciales:', error);
+      setProyectos([]);
     }
   };
 
-  const loadBudgetItems = async (proyectoId) => {
+  /**
+   * Carga los ítems presupuestarios asociados al proyecto seleccionado.
+   * @param {string} proyectoId
+   */
+  const cargarItemsPresupuestarios = async (proyectoId) => {
     try {
       const items = await getBudgetItems(proyectoId);
-      setItemsPresupuestarios(items);
+      // Asegurar que sea un array
+      setItemsPresupuestarios(Array.isArray(items) ? items : []);
       setSubitemsPresupuestarios([]);
       setFormData(prev => ({ ...prev, item_presupuestario: '', subitem_presupuestario: '' }));
     } catch (error) {
-      toast.error('Error al cargar los ítems presupuestarios');
+      toast.error('Ha ocurrido un error al cargar los ítems presupuestarios');
+      console.error('Error al cargar ítems presupuestarios:', error);
+      setItemsPresupuestarios([]);
     }
   };
 
-  const loadSubitems = async (itemId) => {
+  /**
+   * Carga los subítems asociados al ítem presupuestario seleccionado.
+   * @param {string} itemId
+   */
+  const cargarSubitems = async (itemId) => {
     try {
       const subitems = await getSubitems(itemId);
-      setSubitemsPresupuestarios(subitems);
+      // Asegurar que sea un array
+      setSubitemsPresupuestarios(Array.isArray(subitems) ? subitems : []);
       setFormData(prev => ({ ...prev, subitem_presupuestario: '' }));
     } catch (error) {
-      toast.error('Error al cargar los subítems');
+      toast.error('Ha ocurrido un error al cargar los subítems presupuestarios');
+      console.error('Error al cargar subítems:', error);
+      setSubitemsPresupuestarios([]);
     }
   };
 
+  /**
+   * Maneja el cambio de cualquier campo del formulario.
+   * @param {object} e Evento de React
+   */
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    
-    // Clear error for this field
+
+    // Limpia el error para el campo modificado
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: null }));
     }
   };
 
+  /**
+   * Maneja la carga de los archivos de evidencia en el formulario.
+   * @param {object} e Evento de React
+   */
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
     setEvidencias(files);
   };
 
-  const validateForm = () => {
-    const newErrors = {};
-    
-    if (!formData.proyecto) newErrors.proyecto = 'Debe seleccionar un proyecto';
+  /**
+   * Valida que todos los campos requeridos del formulario estén completos correctamente.
+   * @returns {boolean} true si el formulario es válido, false de lo contrario
+   */
+  const validarFormulario = () => {
+    const nuevosErrores = {};
+
+    if (!formData.proyecto) nuevosErrores.proyecto = 'Debe seleccionar un proyecto';
     if (!formData.proveedor && !crearNuevoProveedor) {
-      newErrors.proveedor = 'Debe seleccionar o crear un proveedor';
+      nuevosErrores.proveedor = 'Debe seleccionar o crear un proveedor';
     }
     if (crearNuevoProveedor) {
-      if (!formData.nuevo_proveedor_nombre) newErrors.nuevo_proveedor_nombre = 'Requerido';
-      if (!formData.nuevo_proveedor_rut) newErrors.nuevo_proveedor_rut = 'Requerido';
-      if (!formData.nuevo_proveedor_email) newErrors.nuevo_proveedor_email = 'Requerido';
+      if (!formData.nuevo_proveedor_nombre) nuevosErrores.nuevo_proveedor_nombre = 'Campo requerido';
+      if (!formData.nuevo_proveedor_rut) nuevosErrores.nuevo_proveedor_rut = 'Campo requerido';
+      if (!formData.nuevo_proveedor_email) nuevosErrores.nuevo_proveedor_email = 'Campo requerido';
     }
     if (!formData.monto_transaccion || parseFloat(formData.monto_transaccion) <= 0) {
-      newErrors.monto_transaccion = 'El monto debe ser mayor a cero';
+      nuevosErrores.monto_transaccion = 'El monto debe ser mayor a cero';
     }
-    if (!formData.fecha_registro) newErrors.fecha_registro = 'Requerido';
-    if (!formData.nro_documento) newErrors.nro_documento = 'Requerido';
+    if (!formData.fecha_registro) nuevosErrores.fecha_registro = 'Campo requerido';
+    if (!formData.nro_documento) nuevosErrores.nro_documento = 'Campo requerido';
     if (formData.tipo_transaccion === 'egreso' && !formData.item_presupuestario) {
-      newErrors.item_presupuestario = 'Debe seleccionar un ítem presupuestario para egresos';
+      nuevosErrores.item_presupuestario = 'Debe seleccionar un ítem presupuestario para egresos';
     }
     if (evidencias.length === 0) {
-      newErrors.evidencias = 'Debe adjuntar al menos una evidencia';
+      nuevosErrores.evidencias = 'Debe adjuntar al menos una evidencia';
     }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+
+    setErrors(nuevosErrores);
+    return Object.keys(nuevosErrores).length === 0;
   };
 
+  /**
+   * Maneja el envío del formulario de registro de gastos.
+   * @param {object} e Evento de React
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      toast.error('Por favor, complete todos los campos requeridos');
+
+    if (!validarFormulario()) {
+      toast.error('Por favor, completar todos los campos requeridos');
       return;
     }
 
     setLoading(true);
-    
+
     try {
-      // First, create provider if needed
+      // Si es necesario, primero crea el proveedor nuevo
       let proveedorId = formData.proveedor;
-      
+
       if (crearNuevoProveedor) {
-        // Create new provider (you'll need to implement this in the provider service)
-        // For now, we'll assume the backend handles it or we create it separately
-        toast.info('Creando proveedor...');
-        // This would call a createProvider service
+        toast.info('Creando nuevo proveedor...');
+        try {
+          const nuevoProveedor = await createProvider({
+            nombre_proveedor: formData.nuevo_proveedor_nombre,
+            rut_proveedor: formData.nuevo_proveedor_rut,
+            email_proveedor: formData.nuevo_proveedor_email,
+          });
+          proveedorId = nuevoProveedor.id;
+          toast.success('Proveedor creado exitosamente');
+        } catch (error) {
+          toast.error(error.message || 'Error al crear el proveedor. Verifique los datos ingresados.');
+          setLoading(false);
+          return;
+        }
       }
-      
-      // Prepare transaction data
-      const transactionData = {
+
+      // Validar que tenemos un proveedor válido
+      if (!proveedorId || isNaN(parseInt(proveedorId))) {
+        toast.error('Debe seleccionar o crear un proveedor válido');
+        setLoading(false);
+        return;
+      }
+
+      // Prepara los datos para la transacción
+      const datosTransaccion = {
         proyecto: parseInt(formData.proyecto),
         proveedor: parseInt(proveedorId),
         monto_transaccion: parseFloat(formData.monto_transaccion),
@@ -175,18 +229,18 @@ const RegisterExpense = () => {
         numero_cuenta_bancaria: formData.numero_cuenta_bancaria || null,
         numero_operacion_bancaria: formData.numero_operacion_bancaria || null,
       };
-      
+
       if (formData.item_presupuestario) {
-        transactionData.item_presupuestario = parseInt(formData.item_presupuestario);
+        datosTransaccion.item_presupuestario = parseInt(formData.item_presupuestario);
       }
       if (formData.subitem_presupuestario) {
-        transactionData.subitem_presupuestario = parseInt(formData.subitem_presupuestario);
+        datosTransaccion.subitem_presupuestario = parseInt(formData.subitem_presupuestario);
       }
-      
-      // Create transaction
-      const transaccion = await createTransaction(transactionData);
-      
-      // Upload and link evidence
+
+      // Se crea la transacción
+      const transaccion = await createTransaction(datosTransaccion);
+
+      // Se adjuntan y vinculan las evidencias
       if (evidencias.length > 0 && transaccion.id) {
         for (const evidencia of evidencias) {
           try {
@@ -195,20 +249,46 @@ const RegisterExpense = () => {
               evidencia,
               evidencia.name
             );
-            
             await linkEvidenceToTransaction(transaccion.id, evidenciaData.id);
           } catch (error) {
             console.error('Error al subir evidencia:', error);
-            toast.warning(`Error al subir evidencia ${evidencia.name}`);
+            toast.warning(`Ocurrió un error al subir la evidencia ${evidencia.name}`);
           }
         }
       }
-      
-      toast.success('Gasto registrado exitosamente');
+
+      toast.success('El gasto se registró exitosamente');
       navigate('/');
     } catch (error) {
-      toast.error(error.message || 'Error al registrar el gasto');
-      console.error('Error:', error);
+      // Mejorar el mensaje de error mostrando detalles específicos
+      let errorMessage = 'Ha ocurrido un error al registrar el gasto';
+      
+      if (error.response?.data) {
+        // Si hay errores de validación del backend, mostrarlos
+        const backendErrors = error.response.data;
+        if (backendErrors.error) {
+          errorMessage = backendErrors.error;
+        } else if (typeof backendErrors === 'object') {
+          // Si hay múltiples errores de validación
+          const errorList = Object.entries(backendErrors)
+            .map(([field, messages]) => {
+              if (Array.isArray(messages)) {
+                return `${field}: ${messages.join(', ')}`;
+              }
+              return `${field}: ${messages}`;
+            })
+            .join('; ');
+          errorMessage = errorList || errorMessage;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
+      console.error('Error completo:', error);
+      if (error.response) {
+        console.error('Datos de respuesta del error:', error.response.data);
+      }
     } finally {
       setLoading(false);
     }
@@ -217,15 +297,15 @@ const RegisterExpense = () => {
   return (
     <div className="container mt-4">
       <ToastContainer position="top-right" autoClose={3000} />
-      
+
       <div className="row justify-content-center">
         <div className="col-md-10">
           <div className="card shadow-sm">
             <div className="card-body">
-              <h1 className="card-title text-center mb-4">Registrar Nuevo Gasto</h1>
-              
+              <h1 className="card-title text-center mb-4">Registrar nuevo gasto</h1>
+
               <form onSubmit={handleSubmit}>
-                {/* Project Selection */}
+                {/* Selección de proyecto */}
                 <div className="mb-3">
                   <label htmlFor="proyecto" className="form-label">
                     Proyecto <span className="text-danger">*</span>
@@ -238,8 +318,8 @@ const RegisterExpense = () => {
                     onChange={handleChange}
                     required
                   >
-                    <option value="">Seleccionar un proyecto...</option>
-                    {proyectos.map(proyecto => (
+                    <option value="">Seleccione un proyecto...</option>
+                    {Array.isArray(proyectos) && proyectos.map(proyecto => (
                       <option key={proyecto.id} value={proyecto.id}>
                         {proyecto.nombre_proyecto}
                       </option>
@@ -248,7 +328,7 @@ const RegisterExpense = () => {
                   {errors.proyecto && <div className="invalid-feedback">{errors.proyecto}</div>}
                 </div>
 
-                {/* Provider Selection/Creation */}
+                {/* Selección o creación de proveedor */}
                 <div className="mb-3">
                   <label className="form-label">
                     Proveedor <span className="text-danger">*</span>
@@ -262,10 +342,10 @@ const RegisterExpense = () => {
                       onChange={(e) => setCrearNuevoProveedor(e.target.checked)}
                     />
                     <label className="form-check-label" htmlFor="crearNuevoProveedor">
-                      Crear nuevo proveedor
+                      Crear un nuevo proveedor
                     </label>
                   </div>
-                  
+
                   {!crearNuevoProveedor ? (
                     <select
                       name="proveedor"
@@ -274,8 +354,8 @@ const RegisterExpense = () => {
                       onChange={handleChange}
                       required
                     >
-                      <option value="">Seleccionar proveedor...</option>
-                      {/* Providers would be loaded here */}
+                      <option value="">Seleccione un proveedor...</option>
+                      {/* Aquí se mostrarían los proveedores cargados */}
                     </select>
                   ) : (
                     <div className="row">
@@ -306,7 +386,7 @@ const RegisterExpense = () => {
                           type="email"
                           name="nuevo_proveedor_email"
                           className={`form-control ${errors.nuevo_proveedor_email ? 'is-invalid' : ''}`}
-                          placeholder="Email"
+                          placeholder="Correo electrónico"
                           value={formData.nuevo_proveedor_email}
                           onChange={handleChange}
                           required
@@ -316,7 +396,7 @@ const RegisterExpense = () => {
                   )}
                 </div>
 
-                {/* Amount and Date */}
+                {/* Monto y fecha del gasto */}
                 <div className="row mb-3">
                   <div className="col-md-6">
                     <label htmlFor="monto_transaccion" className="form-label">
@@ -339,7 +419,7 @@ const RegisterExpense = () => {
                   </div>
                   <div className="col-md-6">
                     <label htmlFor="fecha_registro" className="form-label">
-                      Fecha del Gasto <span className="text-danger">*</span>
+                      Fecha del gasto <span className="text-danger">*</span>
                     </label>
                     <input
                       type="date"
@@ -353,11 +433,11 @@ const RegisterExpense = () => {
                   </div>
                 </div>
 
-                {/* Document Information */}
+                {/* Información del documento */}
                 <div className="row mb-3">
                   <div className="col-md-6">
                     <label htmlFor="nro_documento" className="form-label">
-                      Número de Documento <span className="text-danger">*</span>
+                      Número de documento <span className="text-danger">*</span>
                     </label>
                     <input
                       type="text"
@@ -371,7 +451,7 @@ const RegisterExpense = () => {
                   </div>
                   <div className="col-md-6">
                     <label htmlFor="tipo_doc_transaccion" className="form-label">
-                      Tipo de Documento <span className="text-danger">*</span>
+                      Tipo de documento <span className="text-danger">*</span>
                     </label>
                     <select
                       id="tipo_doc_transaccion"
@@ -381,21 +461,21 @@ const RegisterExpense = () => {
                       onChange={handleChange}
                       required
                     >
-                      <option value="factura electrónica">Factura Electrónica</option>
-                      <option value="factura exenta">Factura Exenta</option>
-                      <option value="boleta de compra">Boleta de Compra</option>
-                      <option value="boleta de honorarios">Boleta de Honorarios</option>
+                      <option value="factura electrónica">Factura electrónica</option>
+                      <option value="factura exenta">Factura exenta</option>
+                      <option value="boleta de compra">Boleta de compra</option>
+                      <option value="boleta de honorarios">Boleta de honorarios</option>
                     </select>
                   </div>
                 </div>
 
-                {/* Budget Items */}
+                {/* Ítems presupuestarios */}
                 {formData.tipo_transaccion === 'egreso' && (
                   <>
                     <div className="row mb-3">
                       <div className="col-md-6">
                         <label htmlFor="item_presupuestario" className="form-label">
-                          Ítem Presupuestario <span className="text-danger">*</span>
+                          Ítem presupuestario <span className="text-danger">*</span>
                         </label>
                         <select
                           id="item_presupuestario"
@@ -406,11 +486,11 @@ const RegisterExpense = () => {
                           required
                           disabled={!formData.proyecto}
                         >
-                          <option value="">Seleccionar ítem...</option>
-                          {itemsPresupuestarios.map(item => (
+                          <option value="">Seleccione un ítem...</option>
+                          {Array.isArray(itemsPresupuestarios) && itemsPresupuestarios.map(item => (
                             <option key={item.id} value={item.id}>
-                              {item.nombre_item_presupuesto} 
-                              (Saldo: ${item.saldo_disponible?.toLocaleString('es-CL') || 'N/A'})
+                              {item.nombre_item_presupuesto}
+                              {` (Saldo: $${item.saldo_disponible?.toLocaleString('es-CL') || 'N/A'})`}
                             </option>
                           ))}
                         </select>
@@ -420,7 +500,7 @@ const RegisterExpense = () => {
                       </div>
                       <div className="col-md-6">
                         <label htmlFor="subitem_presupuestario" className="form-label">
-                          Subítem Presupuestario (Opcional)
+                          Subítem presupuestario (opcional)
                         </label>
                         <select
                           id="subitem_presupuestario"
@@ -430,8 +510,8 @@ const RegisterExpense = () => {
                           onChange={handleChange}
                           disabled={!formData.item_presupuestario}
                         >
-                          <option value="">Seleccionar subítem...</option>
-                          {subitemsPresupuestarios.map(subitem => (
+                          <option value="">Seleccione un subítem...</option>
+                          {Array.isArray(subitemsPresupuestarios) && subitemsPresupuestarios.map(subitem => (
                             <option key={subitem.id} value={subitem.id}>
                               {subitem.nombre_subitem_presupuesto}
                             </option>
@@ -439,10 +519,10 @@ const RegisterExpense = () => {
                         </select>
                       </div>
                     </div>
-                    
+
                     <div className="mb-3">
                       <label htmlFor="categoria_gasto" className="form-label">
-                        Categoría del Gasto
+                        Categoría del gasto
                       </label>
                       <input
                         type="text"
@@ -451,18 +531,18 @@ const RegisterExpense = () => {
                         name="categoria_gasto"
                         value={formData.categoria_gasto}
                         onChange={handleChange}
-                        placeholder="Ej: Materiales, Servicios, etc."
+                        placeholder="Ejemplo: materiales, servicios, etc."
                       />
                     </div>
                   </>
                 )}
 
-                {/* Bank Reconciliation (for income) */}
+                {/* Conciliación bancaria (para ingresos) */}
                 {formData.tipo_transaccion === 'ingreso' && (
                   <div className="row mb-3">
                     <div className="col-md-6">
                       <label htmlFor="numero_cuenta_bancaria" className="form-label">
-                        Número de Cuenta Bancaria
+                        Número de cuenta bancaria
                       </label>
                       <input
                         type="text"
@@ -475,7 +555,7 @@ const RegisterExpense = () => {
                     </div>
                     <div className="col-md-6">
                       <label htmlFor="numero_operacion_bancaria" className="form-label">
-                        Número de Operación Bancaria
+                        Número de operación bancaria
                       </label>
                       <input
                         type="text"
@@ -489,10 +569,10 @@ const RegisterExpense = () => {
                   </div>
                 )}
 
-                {/* Evidence Upload */}
+                {/* Carga de evidencias */}
                 <div className="mb-3">
                   <label htmlFor="evidencias" className="form-label">
-                    Documentos de Respaldo <span className="text-danger">*</span>
+                    Documentos de respaldo <span className="text-danger">*</span>
                   </label>
                   <input
                     type="file"
@@ -520,8 +600,8 @@ const RegisterExpense = () => {
                     </div>
                   )}
                 </div>
-                
-                {/* Submit Buttons */}
+
+                {/* Botones de acción */}
                 <div className="d-flex justify-content-end gap-2 mt-4">
                   <button
                     type="button"
@@ -535,7 +615,7 @@ const RegisterExpense = () => {
                     className="btn btn-primary"
                     disabled={loading}
                   >
-                    {loading ? 'Guardando...' : 'Guardar Gasto'}
+                    {loading ? 'Guardando...' : 'Guardar gasto'}
                   </button>
                 </div>
               </form>

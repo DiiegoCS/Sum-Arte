@@ -1,7 +1,7 @@
 /**
- * Login page for Sum-Arte.
+ * Página de inicio de sesión para Sum-Arte.
  * 
- * Handles user authentication with JWT tokens.
+ * Gestiona la autenticación del usuario con tokens JWT.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -11,7 +11,7 @@ import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 /**
- * Login component.
+ * Componente Login.
  */
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -21,7 +21,7 @@ const Login = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Redirect if already authenticated
+    // Si el usuario ya está autenticado, se redirige a la página de inicio
     if (isAuthenticated) {
       navigate('/');
     }
@@ -45,7 +45,7 @@ const Login = () => {
   return (
     <div className="container">
       <div className="row justify-content-center mt-5">
-        <div className="col-md-6 col-lg-4">
+        <div className="col-md-6 col-lg-12">
           <div className="card shadow">
             <div className="card-body">
               <h2 className="card-title text-center mb-4">Sum-Arte</h2>

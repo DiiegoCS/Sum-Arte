@@ -13,7 +13,8 @@ import api from './api';
  */
 export const getProjects = async () => {
   const response = await api.get('/proyectos/');
-  return response.data;
+  // La API devuelve datos paginados, extraemos el array de results
+  return response.data.results || response.data;
 };
 
 /**
@@ -58,7 +59,8 @@ export const updateProject = async (projectId, projectData) => {
  */
 export const getBudgetItems = async (projectId) => {
   const response = await api.get(`/items-presupuestarios/?proyecto=${projectId}`);
-  return response.data;
+  // La API devuelve datos paginados, extraemos el array de results
+  return response.data.results || response.data;
 };
 
 /**
@@ -69,7 +71,8 @@ export const getBudgetItems = async (projectId) => {
  */
 export const getSubitems = async (itemId) => {
   const response = await api.get(`/subitems-presupuestarios/?item_presupuesto=${itemId}`);
-  return response.data;
+  // La API devuelve datos paginados, extraemos el array de results
+  return response.data.results || response.data;
 };
 
 /**

@@ -191,7 +191,7 @@ class TransaccionSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = [
             'fecha_creacion', 'fecha_actualizacion', 'fecha_aprobacion',
-            'usuario_aprobador', 'estado_transaccion'
+            'usuario_aprobador', 'estado_transaccion', 'usuario'
         ]
     
     def get_evidencias(self, obj):

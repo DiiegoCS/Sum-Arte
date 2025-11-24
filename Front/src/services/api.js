@@ -71,12 +71,34 @@ api.interceptors.response.use(
     // Se manejan otros errores
     if (error.response) {
       // El servidor respondió con un estado de error
-      const errorMessage = error.response.data?.error || 
-                          error.response.data?.detail || 
-                          error.response.data?.message ||
-                          'Ha ocurrido un error en la solicitud.';
+      const errorData = error.response.data;
+      let errorMessage = errorData?.error || 
+                        errorData?.detail || 
+                        errorData?.message ||
+                        'Ha ocurrido un error en la solicitud.';
       
-      return Promise.reject(new Error(errorMessage));
+      // Si hay errores de validación de campos, formatearlos mejor
+      if (error.response.status === 400 && typeof errorData === 'object') {
+        // DRF devuelve errores de validación como objeto con campos
+        const validationErrors = [];
+        Object.keys(errorData).forEach(key => {
+          if (Array.isArray(errorData[key])) {
+            validationErrors.push(`${key}: ${errorData[key].join(', ')}`);
+          } else if (typeof errorData[key] === 'string') {
+            validationErrors.push(`${key}: ${errorData[key]}`);
+          }
+        });
+        
+        if (validationErrors.length > 0) {
+          errorMessage = validationErrors.join('; ');
+        }
+      }
+      
+      // Crear un error con más información
+      const enhancedError = new Error(errorMessage);
+      enhancedError.response = error.response;
+      enhancedError.status = error.response.status;
+      return Promise.reject(enhancedError);
     } else if (error.request) {
       // La solicitud no recibió respuesta del servidor
       return Promise.reject(new Error('No se pudo conectar con el servidor.'));
