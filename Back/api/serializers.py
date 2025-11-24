@@ -1,8 +1,8 @@
 """
-Serializers for Sum-Arte API.
+Serializadores para la API de Sum-Arte.
 
-This module contains all DRF serializers with nested relationships,
-custom validation, calculated fields, and Spanish error messages.
+En este módulo se definen todos los serializers de DRF con relaciones anidadas,
+validación personalizada, campos calculados y mensajes de error en español.
 """
 
 from rest_framework import serializers
@@ -15,37 +15,34 @@ from .validators import (
     validar_proyecto_no_bloqueado
 )
 
-
 class OrganizacionSerializer(serializers.ModelSerializer):
-    """Serializer para organizaciones."""
+    """Serializador para organizaciones."""
     
     class Meta:
         model = Organizacion
         fields = '__all__'
     
     def validate_rut_organizacion(self, value):
-        """Valida el formato del RUT."""
+        """Valida que el RUT tenga al menos 8 caracteres."""
         if not value or len(value) < 8:
             raise serializers.ValidationError("El RUT debe tener al menos 8 caracteres.")
         return value
 
-
 class ProveedorSerializer(serializers.ModelSerializer):
-    """Serializer para proveedores."""
+    """Serializador para proveedores."""
     
     class Meta:
         model = Proveedor
         fields = '__all__'
     
     def validate_rut_proveedor(self, value):
-        """Valida el formato del RUT del proveedor."""
+        """Valida que el RUT del proveedor tenga al menos 8 caracteres."""
         if not value or len(value) < 8:
             raise serializers.ValidationError("El RUT del proveedor debe tener al menos 8 caracteres.")
         return value
 
-
 class SubitemPresupuestarioSerializer(serializers.ModelSerializer):
-    """Serializer para subítems presupuestarios con campos calculados."""
+    """Serializador para subítems presupuestarios, incluyendo campos calculados."""
     
     saldo_disponible = serializers.ReadOnlyField()
     porcentaje_ejecutado = serializers.SerializerMethodField()
@@ -59,9 +56,8 @@ class SubitemPresupuestarioSerializer(serializers.ModelSerializer):
         """Calcula el porcentaje ejecutado del subítem."""
         return obj.porcentaje_ejecutado()
 
-
 class ItemPresupuestarioSerializer(serializers.ModelSerializer):
-    """Serializer para ítems presupuestarios con subítems anidados."""
+    """Serializador para ítems presupuestarios con subítems anidados."""
     
     saldo_disponible = serializers.ReadOnlyField()
     porcentaje_ejecutado = serializers.SerializerMethodField()
@@ -76,9 +72,8 @@ class ItemPresupuestarioSerializer(serializers.ModelSerializer):
         """Calcula el porcentaje ejecutado del ítem."""
         return obj.porcentaje_ejecutado()
 
-
 class ProyectoSerializer(serializers.ModelSerializer):
-    """Serializer para proyectos con ítems presupuestarios anidados."""
+    """Serializador para proyectos con ítems presupuestarios anidados."""
     
     items_presupuestarios = ItemPresupuestarioSerializer(many=True, read_only=True)
     monto_disponible = serializers.SerializerMethodField()
@@ -100,9 +95,8 @@ class ProyectoSerializer(serializers.ModelSerializer):
             return 0.0
         return float((obj.monto_ejecutado_proyecto / obj.presupuesto_total) * 100)
 
-
 class EvidenciaSerializer(serializers.ModelSerializer):
-    """Serializer para evidencias con información del usuario."""
+    """Serializador para evidencias, mostrando información del usuario cargador."""
     
     usuario_carga_nombre = serializers.CharField(source='usuario_carga.username', read_only=True)
     archivo_url = serializers.SerializerMethodField()
@@ -114,7 +108,7 @@ class EvidenciaSerializer(serializers.ModelSerializer):
         read_only_fields = ['fecha_carga', 'version', 'usuario_carga']
     
     def get_archivo_url(self, obj):
-        """Retorna la URL del archivo."""
+        """Obtiene la URL completa del archivo de evidencia."""
         if obj.archivo_evidencia:
             request = self.context.get('request')
             if request:
@@ -123,7 +117,7 @@ class EvidenciaSerializer(serializers.ModelSerializer):
         return None
     
     def get_tamanio_archivo(self, obj):
-        """Retorna el tamaño del archivo en bytes."""
+        """Obtiene el tamaño en bytes del archivo de evidencia."""
         if obj.archivo_evidencia:
             try:
                 return obj.archivo_evidencia.size
@@ -131,9 +125,8 @@ class EvidenciaSerializer(serializers.ModelSerializer):
                 return None
         return None
 
-
 class TransaccionEvidenciaSerializer(serializers.ModelSerializer):
-    """Serializer para la relación transacción-evidencia."""
+    """Serializador para la relación transacción-evidencia."""
     
     evidencia = EvidenciaSerializer(read_only=True)
     evidencia_id = serializers.PrimaryKeyRelatedField(
@@ -146,9 +139,8 @@ class TransaccionEvidenciaSerializer(serializers.ModelSerializer):
         model = Transaccion_Evidencia
         fields = '__all__'
 
-
 class LogTransaccionSerializer(serializers.ModelSerializer):
-    """Serializer para logs de transacciones."""
+    """Serializador para logs de transacciones."""
     
     usuario_nombre = serializers.CharField(source='usuario.username', read_only=True)
     accion_display = serializers.CharField(source='get_accion_realizada_display', read_only=True)
@@ -158,11 +150,10 @@ class LogTransaccionSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['fecha_hora_accion']
 
-
 class TransaccionSerializer(serializers.ModelSerializer):
-    """Serializer para transacciones con relaciones anidadas y validación."""
+    """Serializador para transacciones, con relaciones anidadas y validaciones."""
     
-    # Campos anidados (read-only)
+    # Se definen los campos anidados de solo lectura
     proyecto_nombre = serializers.CharField(source='proyecto.nombre_proyecto', read_only=True)
     usuario_nombre = serializers.CharField(source='usuario.username', read_only=True)
     proveedor_nombre = serializers.CharField(source='proveedor.nombre_proveedor', read_only=True)
@@ -185,10 +176,10 @@ class TransaccionSerializer(serializers.ModelSerializer):
     tipo_display = serializers.CharField(source='get_tipo_transaccion_display', read_only=True)
     tipo_doc_display = serializers.CharField(source='get_tipo_doc_transaccion_display', read_only=True)
     
-    # Evidencias vinculadas
+    # Se muestran las evidencias vinculadas a la transacción
     evidencias = serializers.SerializerMethodField()
     
-    # Logs de la transacción
+    # Se muestran los logs relacionados a la transacción
     logs = LogTransaccionSerializer(many=True, read_only=True)
     
     # Campos calculados
@@ -204,12 +195,11 @@ class TransaccionSerializer(serializers.ModelSerializer):
         ]
     
     def get_evidencias(self, obj):
-        """Obtiene las evidencias vinculadas a la transacción."""
+        """Obtiene la lista de evidencias asociadas a la transacción."""
         evidencias = Transaccion_Evidencia.objects.filter(
             transaccion=obj,
             evidencia__eliminado=False
         ).select_related('evidencia')
-        
         return EvidenciaSerializer(
             [te.evidencia for te in evidencias],
             many=True,
@@ -217,19 +207,19 @@ class TransaccionSerializer(serializers.ModelSerializer):
         ).data
     
     def get_puede_editar(self, obj):
-        """Indica si la transacción puede ser editada."""
+        """Indica si la transacción puede ser editada actualmente."""
         return obj.puede_editar()
     
     def get_puede_aprobar(self, obj):
-        """Indica si la transacción puede ser aprobada por el usuario actual."""
+        """Indica si el usuario actual puede aprobar la transacción."""
         request = self.context.get('request')
         if request and request.user:
             return obj.puede_aprobar(request.user)
         return False
     
     def validate(self, data):
-        """Validación personalizada de la transacción."""
-        # Validar duplicidad (C003)
+        """Ejecuta la validación personalizada de la transacción."""
+        # Se valida la duplicidad de la transacción (C003)
         proveedor = data.get('proveedor') or (self.instance.proveedor if self.instance else None)
         nro_documento = data.get('nro_documento') or (self.instance.nro_documento if self.instance else None)
         
@@ -240,13 +230,13 @@ class TransaccionSerializer(serializers.ModelSerializer):
             except Exception as e:
                 raise serializers.ValidationError(str(e))
         
-        # Validar que no se modifique una transacción aprobada/rechazada
+        # Se impide la modificación si la transacción ya fue aprobada o rechazada
         if self.instance and self.instance.estado_transaccion != 'pendiente':
             raise serializers.ValidationError(
                 "No se puede modificar una transacción que ya ha sido aprobada o rechazada."
             )
         
-        # Validar proyecto no bloqueado
+        # Se valida que el proyecto asociado no esté bloqueado
         proyecto = data.get('proyecto') or (self.instance.proyecto if self.instance else None)
         if proyecto:
             try:
@@ -254,14 +244,14 @@ class TransaccionSerializer(serializers.ModelSerializer):
             except Exception as e:
                 raise serializers.ValidationError(str(e))
         
-        # Validar saldo disponible para egresos (C001)
+        # Si la transacción es de tipo egreso, se valida el saldo disponible y la categoría
         if data.get('tipo_transaccion') == 'egreso' or (self.instance and self.instance.tipo_transaccion == 'egreso'):
             item = data.get('item_presupuestario') or (self.instance.item_presupuestario if self.instance else None)
             subitem = data.get('subitem_presupuestario') or (self.instance.subitem_presupuestario if self.instance else None)
             monto = data.get('monto_transaccion') or (self.instance.monto_transaccion if self.instance else None)
             
             if monto and (item or subitem):
-                # Crear una transacción temporal para validar
+                # Se crea una instancia temporal de Transaccion para realizar la validación de saldo
                 transaccion_temp = Transaccion(
                     monto_transaccion=monto,
                     item_presupuestario=item,
@@ -276,7 +266,7 @@ class TransaccionSerializer(serializers.ModelSerializer):
                 except Exception as e:
                     raise serializers.ValidationError(str(e))
             
-            # Validar categoría (C006)
+            # Se valida que la categoría de gasto corresponda (C006)
             if item and data.get('categoria_gasto'):
                 transaccion_temp = Transaccion(
                     categoria_gasto=data.get('categoria_gasto'),
@@ -289,17 +279,15 @@ class TransaccionSerializer(serializers.ModelSerializer):
         
         return data
 
-
 class RolSerializer(serializers.ModelSerializer):
-    """Serializer para roles."""
+    """Serializador para roles."""
     
     class Meta:
         model = Rol
         fields = '__all__'
 
-
 class UsuarioRolProyectoSerializer(serializers.ModelSerializer):
-    """Serializer para asignaciones usuario-rol-proyecto."""
+    """Serializador para las asignaciones de usuario-rol-proyecto."""
     
     usuario_nombre = serializers.CharField(source='usuario.username', read_only=True)
     rol_nombre = serializers.CharField(source='rol.nombre_rol', read_only=True)
@@ -309,9 +297,8 @@ class UsuarioRolProyectoSerializer(serializers.ModelSerializer):
         model = Usuario_Rol_Proyecto
         fields = '__all__'
 
-
 class UsuarioSerializer(serializers.ModelSerializer):
-    """Serializer para usuarios."""
+    """Serializador para usuarios."""
     
     organizacion_nombre = serializers.CharField(
         source='id_organizacion.nombre_organizacion',
@@ -329,7 +316,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
         }
     
     def create(self, validated_data):
-        """Crea un usuario con contraseña hasheada."""
+        """Crea un usuario nuevo, guardando la contraseña de manera segura."""
         password = validated_data.pop('password', None)
         instance = self.Meta.model(**validated_data)
         if password is not None:
@@ -338,7 +325,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
         return instance
     
     def update(self, instance, validated_data):
-        """Actualiza un usuario, hasheando la contraseña si se proporciona."""
+        """Actualiza los datos del usuario, hasheando la contraseña si se incluye."""
         password = validated_data.pop('password', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)

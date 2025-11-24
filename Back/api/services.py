@@ -1,8 +1,9 @@
 """
-Service layer for Sum-Arte API.
+Capa de servicios para la API de Sum-Arte.
 
-This module contains business logic services for complex operations
-including transaction approval, budget management, and rendition generation.
+Este módulo contiene los servicios de lógica de negocio relacionados
+con operaciones complejas como la aprobación de transacciones, manejo
+de presupuesto y generación de rendiciones.
 """
 
 from django.db import transaction as db_transaction
@@ -32,9 +33,9 @@ from .constants import (
 
 class TransactionService:
     """
-    Service class for transaction-related operations.
+    Clase de servicio para operaciones relacionadas con transacciones.
     
-    Handles transaction creation, approval, rejection, and budget updates.
+    Se encarga de la creación, aprobación, rechazo de transacciones y actualización de presupuesto.
     """
     
     @staticmethod
@@ -53,23 +54,23 @@ class TransactionService:
         Raises:
             ValidationError: Si la validación falla
         """
-        # Validar que el proyecto no esté bloqueado
+        # Se valida que el proyecto no esté bloqueado
         proyecto = transaccion_data['proyecto']
         validar_proyecto_no_bloqueado(proyecto)
         
-        # Validar duplicidad (C003)
+        # Se valida la duplicidad (C003)
         validar_duplicidad(
             transaccion_data['proveedor'],
             transaccion_data['nro_documento']
         )
         
-        # Validar cumplimiento normativo (C011)
+        # Se valida el cumplimiento normativo (C011)
         transaccion = Transaccion(**transaccion_data)
         transaccion.usuario = usuario
         transaccion.estado_transaccion = ESTADO_PENDIENTE
         validar_cumplimiento_normativo(transaccion)
         
-        # Si es un egreso, validar saldo disponible (C001)
+        # Si es un egreso, se valida el saldo disponible (C001)
         if transaccion.tipo_transaccion == 'egreso':
             item = transaccion.item_presupuestario
             subitem = transaccion.subitem_presupuestario
@@ -81,14 +82,14 @@ class TransactionService:
             else:
                 raise ValidationError("Las transacciones de egreso deben estar asociadas a un ítem presupuestario.")
             
-            # Validar categoría (C006)
+            # Se valida la categoría (C006)
             if item and transaccion.categoria_gasto:
                 validar_categoria_gasto(transaccion, item)
         
-        # Guardar la transacción
+        # Se guarda la transacción
         transaccion.save()
         
-        # Crear log de creación (C005)
+        # Se registra el log de creación (C005)
         Log_transaccion.objects.create(
             transaccion=transaccion,
             usuario=usuario,
@@ -115,40 +116,40 @@ class TransactionService:
             TransaccionAprobadaException: Si la transacción ya está aprobada/rechazada
             SaldoInsuficienteException: Si no hay saldo suficiente
         """
-        # Validar que se pueda aprobar
+        # Se valida que se pueda aprobar la transacción
         if not transaccion.puede_aprobar(usuario_aprobador):
             if transaccion.usuario == usuario_aprobador:
                 raise SegregacionFuncionesException()
             if transaccion.estado_transaccion != ESTADO_PENDIENTE:
                 raise TransaccionAprobadaException()
         
-        # Validar proyecto no bloqueado
+        # Se valida que el proyecto no se encuentre bloqueado
         validar_proyecto_no_bloqueado(transaccion.proyecto)
         
-        # Si es un egreso, validar saldo disponible (C001)
+        # Si es un egreso, se valida el saldo disponible (C001)
         if transaccion.tipo_transaccion == 'egreso':
             if transaccion.subitem_presupuestario:
                 validar_saldo_disponible(transaccion, subitem_presupuestario=transaccion.subitem_presupuestario)
             elif transaccion.item_presupuestario:
                 validar_saldo_disponible(transaccion, item_presupuestario=transaccion.item_presupuestario)
             
-            # Validar categoría (C006)
+            # Se valida la categoría (C006)
             if transaccion.item_presupuestario and transaccion.categoria_gasto:
                 validar_categoria_gasto(transaccion, transaccion.item_presupuestario)
         
-        # Validar cumplimiento normativo (C011)
+        # Se valida el cumplimiento normativo (C011)
         validar_cumplimiento_normativo(transaccion)
         
-        # Actualizar estado
+        # Se actualiza el estado de la transacción a "aprobado"
         transaccion.estado_transaccion = ESTADO_APROBADO
         transaccion.fecha_aprobacion = timezone.now()
         transaccion.usuario_aprobador = usuario_aprobador
         transaccion.save()
         
-        # Actualizar montos ejecutados
+        # Se actualizan los montos ejecutados en el presupuesto asociado
         BudgetService.actualizar_montos_ejecutados(transaccion)
         
-        # Crear log de aprobación (C005)
+        # Se registra el log de aprobación (C005)
         Log_transaccion.objects.create(
             transaccion=transaccion,
             usuario=usuario_aprobador,
@@ -177,11 +178,11 @@ class TransactionService:
         if transaccion.estado_transaccion != ESTADO_PENDIENTE:
             raise TransaccionAprobadaException()
         
-        # Actualizar estado
+        # Se actualiza el estado de la transacción a "rechazado"
         transaccion.estado_transaccion = ESTADO_RECHAZADO
         transaccion.save()
         
-        # Crear log de rechazo (C005)
+        # Se registra el log de rechazo (C005)
         Log_transaccion.objects.create(
             transaccion=transaccion,
             usuario=usuario_rechazador,
@@ -193,9 +194,9 @@ class TransactionService:
 
 class BudgetService:
     """
-    Service class for budget-related operations.
+    Clase de servicio para operaciones relacionadas con el presupuesto.
     
-    Handles budget calculations and updates.
+    Se encarga del cálculo y actualización de los montos del presupuesto.
     """
     
     @staticmethod
@@ -209,27 +210,27 @@ class BudgetService:
         """
         monto = transaccion.monto_transaccion
         
-        # Actualizar subítem si existe
+        # Se actualiza el subítem si existe
         if transaccion.subitem_presupuestario:
             subitem = transaccion.subitem_presupuestario
             subitem.monto_ejecutado_subitem += monto
             subitem.save()
             
-            # Actualizar ítem padre
+            # Se actualiza el ítem padre
             item = subitem.item_presupuesto
             item.monto_ejecutado_item += monto
             item.save()
         elif transaccion.item_presupuestario:
-            # Actualizar solo el ítem
+            # Se actualiza sólo el ítem
             item = transaccion.item_presupuestario
             item.monto_ejecutado_item += monto
             item.save()
         
-        # Actualizar monto ejecutado del proyecto
+        # Se actualiza el monto ejecutado del proyecto
         proyecto = transaccion.proyecto
         if transaccion.tipo_transaccion == 'egreso':
             proyecto.monto_ejecutado_proyecto += monto
-        else:  # ingreso
+        else:  # Si es ingreso
             proyecto.presupuesto_total += monto
         proyecto.save()
     
@@ -303,9 +304,9 @@ class BudgetService:
 
 class RenditionService:
     """
-    Service class for rendition-related operations.
+    Clase de servicio para operaciones relacionadas con las rendiciones.
     
-    Handles pre-rendition validation and rendition closing.
+    Se encarga de la validación previa a la rendición y del cierre de rendiciones.
     """
     
     @staticmethod
@@ -323,7 +324,7 @@ class RenditionService:
             resultado = validar_integridad_pre_rendicion(proyecto)
             return resultado
         except RendicionIncompletaException as e:
-            # Retornar los errores sin lanzar excepción
+            # Se retornan los errores encontrados sin lanzar excepción
             return {
                 'valido': False,
                 'errores': [str(e.detail)],
@@ -346,7 +347,7 @@ class RenditionService:
         Raises:
             RendicionIncompletaException: Si hay errores en la validación
         """
-        # Validar integridad (C008)
+        # Se valida la integridad de la rendición (C008)
         resultado = validar_integridad_pre_rendicion(proyecto)
         
         if not resultado['valido']:
@@ -354,13 +355,13 @@ class RenditionService:
                 detail="; ".join(resultado['errores'])
             )
         
-        # Cambiar estado del proyecto a 'completado' o 'cerrado'
-        # (dependiendo de la lógica de negocio)
+        # Se cambia el estado del proyecto a 'completado' o 'cerrado'
+        # (esto depende de la lógica de negocio establecida)
         proyecto.estado_proyecto = 'completado'
         proyecto.save()
         
-        # Las transacciones ya no se pueden editar porque el proyecto está bloqueado
-        # (esto se valida en validar_proyecto_no_bloqueado)
+        # Las transacciones quedan bloqueadas para edición porque el proyecto se encuentra bloqueado
+        # (esta validación se realiza en validar_proyecto_no_bloqueado)
         
         return proyecto
 
