@@ -1,8 +1,8 @@
 """
-Custom exceptions for Sum-Arte API.
+Excepciones personalizadas para la API de Sum-Arte.
 
-This module defines custom exception classes for better error handling
-and consistent error messages throughout the application.
+Este módulo define las clases de excepciones personalizadas para un mejor manejo
+de errores y mensajes de error consistentes en toda la aplicación.
 """
 
 from rest_framework.exceptions import APIException
@@ -11,9 +11,9 @@ from rest_framework import status
 
 class SumArteException(APIException):
     """
-    Base exception class for Sum-Arte API.
+    Clase base de excepción para la API de Sum-Arte.
     
-    All custom exceptions should inherit from this class.
+    Todas las excepciones personalizadas deben heredar de esta clase.
     """
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "Ha ocurrido un error en la operación."
@@ -21,12 +21,12 @@ class SumArteException(APIException):
     
     def __init__(self, detail=None, code=None, status_code=None):
         """
-        Initialize the exception.
+        Inicializa la excepción.
         
         Args:
-            detail: Error message detail
-            code: Error code
-            status_code: HTTP status code
+            detail: Detalle del mensaje de error
+            code: Código de error
+            status_code: Código de estado HTTP
         """
         if status_code is not None:
             self.status_code = status_code
@@ -35,7 +35,7 @@ class SumArteException(APIException):
 
 class SaldoInsuficienteException(SumArteException):
     """
-    Exception raised when there's insufficient budget balance.
+    Se lanza cuando no hay saldo presupuestario suficiente.
     
     Control C001: Validar saldo disponible en ítem presupuestario
     """
@@ -46,7 +46,7 @@ class SaldoInsuficienteException(SumArteException):
 
 class TransaccionDuplicadaException(SumArteException):
     """
-    Exception raised when a duplicate transaction is detected.
+    Se lanza cuando se detecta una transacción duplicada.
     
     Control C003: Control de duplicidad (proveedor + nro_documento)
     """
@@ -57,7 +57,7 @@ class TransaccionDuplicadaException(SumArteException):
 
 class CategoriaNoCoincideException(SumArteException):
     """
-    Exception raised when expense category doesn't match budget item category.
+    Se lanza cuando la categoría del gasto no coincide con la del ítem presupuestario.
     
     Control C006: Validación categoría gasto vs ítem
     """
@@ -68,7 +68,7 @@ class CategoriaNoCoincideException(SumArteException):
 
 class SinEvidenciaException(SumArteException):
     """
-    Exception raised when transaction has no linked evidence.
+    Se lanza cuando la transacción no tiene vinculada evidencia.
     
     Control C002: Validar vinculación evidencia-transacción
     """
@@ -79,7 +79,7 @@ class SinEvidenciaException(SumArteException):
 
 class ProyectoBloqueadoException(SumArteException):
     """
-    Exception raised when trying to modify a blocked project.
+    Se lanza cuando se intenta modificar un proyecto bloqueado.
     
     Control C007: Validación tareas pendientes bloqueantes
     """
@@ -90,7 +90,7 @@ class ProyectoBloqueadoException(SumArteException):
 
 class TransaccionAprobadaException(SumArteException):
     """
-    Exception raised when trying to modify an approved/rejected transaction.
+    Se lanza cuando se intenta modificar una transacción ya aprobada o rechazada.
     """
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "No se puede modificar una transacción que ya ha sido aprobada o rechazada."
@@ -99,9 +99,9 @@ class TransaccionAprobadaException(SumArteException):
 
 class SegregacionFuncionesException(SumArteException):
     """
-    Exception raised when segregation of duties is violated.
+    Se lanza cuando se viola la segregación de funciones.
     
-    A user cannot approve a transaction they created.
+    Un usuario no puede aprobar una transacción que ha creado.
     """
     status_code = status.HTTP_403_FORBIDDEN
     default_detail = "No se puede aprobar una transacción creada por el mismo usuario."
@@ -110,11 +110,12 @@ class SegregacionFuncionesException(SumArteException):
 
 class RendicionIncompletaException(SumArteException):
     """
-    Exception raised when trying to close a rendition with incomplete data.
+    Se lanza cuando se intenta cerrar una rendición con datos incompletos.
     
     Control C008: Revisión integridad pre-rendición
     """
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "No se puede cerrar la rendición. Hay transacciones pendientes o sin evidencia."
     default_code = 'rendicion_incompleta'
+
 

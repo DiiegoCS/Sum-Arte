@@ -1,8 +1,8 @@
 """
-Validators for Sum-Arte API business controls.
+Validadores para los controles de negocio de la API de Sum-Arte.
 
-This module implements all business control validations (C001-C011)
-as specified in the project documentation.
+Este módulo implementa todas las validaciones de controles de negocio (C001-C011)
+según lo especificado en la documentación del proyecto.
 """
 
 from django.core.exceptions import ValidationError
