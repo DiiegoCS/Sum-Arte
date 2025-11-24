@@ -8,7 +8,10 @@ los límites organizacionales.
 
 from rest_framework import permissions
 from rest_framework.permissions import BasePermission
-from .models import Usuario_Rol_Proyecto, Rol, Proyecto
+from .models import (
+    Usuario_Rol_Proyecto, Rol, Proyecto,
+    ROL_ADMIN_PRYECTO, ROL_EJECUTOR, ROL_AUDITOR, ROL_DIRECTIVO
+)
 
 
 class IsOrganizationMember(BasePermission):
@@ -110,28 +113,28 @@ class IsAdminProyecto(HasProjectRole):
     Clase de permiso que verifica si el usuario es Administrador de Proyecto
     para el proyecto correspondiente.
     """
-    required_roles = [Rol.ROL_ADMIN_PRYECTO]
+    required_roles = [ROL_ADMIN_PRYECTO]
 
 
 class IsEjecutor(HasProjectRole):
     """
     Clase de permiso que verifica si el usuario es Ejecutor para el proyecto.
     """
-    required_roles = [Rol.ROL_EJECUTOR]
+    required_roles = [ROL_EJECUTOR]
 
 
 class IsAuditor(HasProjectRole):
     """
     Clase de permiso que verifica si el usuario es Auditor para el proyecto.
     """
-    required_roles = [Rol.ROL_AUDITOR]
+    required_roles = [ROL_AUDITOR]
 
 
 class IsDirectivo(HasProjectRole):
     """
     Clase de permiso que verifica si el usuario es Directivo para el proyecto.
     """
-    required_roles = [Rol.ROL_DIRECTIVO]
+    required_roles = [ROL_DIRECTIVO]
 
 
 class IsAdminProyectoOrEjecutor(HasProjectRole):
@@ -139,7 +142,7 @@ class IsAdminProyectoOrEjecutor(HasProjectRole):
     Clase de permiso que verifica si el usuario es Administrador de Proyecto
     o Ejecutor para el proyecto.
     """
-    required_roles = [Rol.ROL_ADMIN_PRYECTO, Rol.ROL_EJECUTOR]
+    required_roles = [ROL_ADMIN_PRYECTO, ROL_EJECUTOR]
 
 
 class IsAdminProyectoOrDirectivo(HasProjectRole):
@@ -147,7 +150,7 @@ class IsAdminProyectoOrDirectivo(HasProjectRole):
     Clase de permiso que verifica si el usuario es Administrador de Proyecto
     o Directivo para el proyecto.
     """
-    required_roles = [Rol.ROL_ADMIN_PRYECTO, Rol.ROL_DIRECTIVO]
+    required_roles = [ROL_ADMIN_PRYECTO, ROL_DIRECTIVO]
 
 
 class CanApproveTransaction(BasePermission):
@@ -178,7 +181,7 @@ class CanApproveTransaction(BasePermission):
         is_admin = Usuario_Rol_Proyecto.objects.filter(
             usuario=request.user,
             proyecto=obj.proyecto,
-            rol__nombre_rol=Rol.ROL_ADMIN_PRYECTO
+            rol__nombre_rol=ROL_ADMIN_PRYECTO
         ).exists()
         
         if not is_admin:
@@ -231,7 +234,7 @@ class CanCreateTransaction(BasePermission):
         user_roles = Usuario_Rol_Proyecto.objects.filter(
             usuario=request.user,
             proyecto=proyecto,
-            rol__nombre_rol__in=[Rol.ROL_EJECUTOR, Rol.ROL_ADMIN_PRYECTO]
+            rol__nombre_rol__in=[ROL_EJECUTOR, ROL_ADMIN_PRYECTO]
         )
         
         return user_roles.exists()

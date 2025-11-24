@@ -1,17 +1,17 @@
 /**
- * Authentication service for Sum-Arte frontend.
+ * Servicio de autenticación para el frontend de Sum-Arte.
  * 
- * Handles login, logout, token storage, and user session management.
+ * Gestiona el inicio/cierre de sesión, almacenamiento de tokens y manejo de sesión de usuario.
  */
 
 import api from './api';
 
 /**
- * Login user with username and password.
+ * Inicia sesión autenticando al usuario con nombre y contraseña.
  * 
- * @param {string} username - User's username
- * @param {string} password - User's password
- * @returns {Promise<Object>} User data and tokens
+ * @param {string} username - Nombre de usuario
+ * @param {string} password - Contraseña del usuario
+ * @returns {Promise<Object>} Datos del usuario y tokens
  */
 export const login = async (username, password) => {
   try {
@@ -22,14 +22,14 @@ export const login = async (username, password) => {
 
     const { access, refresh } = response.data;
 
-    // Store tokens
+    // Guarda los tokens en el almacenamiento local
     localStorage.setItem('access_token', access);
     localStorage.setItem('refresh_token', refresh);
 
-    // Decode token to get user info (simple base64 decode)
+    // Decodifica el token para extraer información del usuario
     const tokenPayload = JSON.parse(atob(access.split('.')[1]));
     
-    // Store user info
+    // Guarda la información del usuario en localStorage
     const userData = {
       id: tokenPayload.user_id,
       username: tokenPayload.username,
@@ -46,7 +46,7 @@ export const login = async (username, password) => {
 };
 
 /**
- * Logout user and clear stored data.
+ * Cierra la sesión del usuario y elimina los datos almacenados.
  */
 export const logout = () => {
   localStorage.removeItem('access_token');
@@ -55,9 +55,9 @@ export const logout = () => {
 };
 
 /**
- * Get current user from localStorage.
+ * Obtiene el usuario actual almacenado en localStorage.
  * 
- * @returns {Object|null} User data or null if not logged in
+ * @returns {Object|null} Devuelve los datos del usuario o null si no está logueado
  */
 export const getCurrentUser = () => {
   const userStr = localStorage.getItem('user');
@@ -72,18 +72,18 @@ export const getCurrentUser = () => {
 };
 
 /**
- * Check if user is authenticated.
+ * Verifica si el usuario está autenticado.
  * 
- * @returns {boolean} True if user has valid token
+ * @returns {boolean} Devuelve true si hay un token válido
  */
 export const isAuthenticated = () => {
   return !!localStorage.getItem('access_token');
 };
 
 /**
- * Refresh access token.
+ * Refresca el token de acceso usando el refresh token almacenado.
  * 
- * @returns {Promise<string>} New access token
+ * @returns {Promise<string>} Devuelve el nuevo token de acceso
  */
 export const refreshToken = async () => {
   const refreshToken = localStorage.getItem('refresh_token');
@@ -106,9 +106,9 @@ export const refreshToken = async () => {
 };
 
 /**
- * Verify token is valid.
+ * Verifica si el token es válido consultando la API.
  * 
- * @returns {Promise<boolean>} True if token is valid
+ * @returns {Promise<boolean>} Devuelve true si el token es válido
  */
 export const verifyToken = async () => {
   const token = localStorage.getItem('access_token');

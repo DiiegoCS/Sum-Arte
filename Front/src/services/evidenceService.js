@@ -1,18 +1,18 @@
 /**
- * Evidence service for Sum-Arte frontend.
+ * Servicio de evidencias para el frontend de Sum-Arte.
  * 
- * Handles evidence file upload, management, and linking to transactions.
+ * Gestiona la carga, administración de archivos de evidencia y la vinculación de evidencias a transacciones.
  */
 
 import api from './api';
 
 /**
- * Upload an evidence file.
+ * Sube un archivo de evidencia.
  * 
- * @param {number} proyectoId - Project ID
- * @param {File} file - File to upload
- * @param {string} nombreEvidencia - Evidence name
- * @returns {Promise<Object>} Created evidence
+ * @param {number} proyectoId - ID del proyecto
+ * @param {File} file - Archivo a subir
+ * @param {string} nombreEvidencia - Nombre de la evidencia
+ * @returns {Promise<Object>} Devuelve la evidencia creada
  */
 export const uploadEvidence = async (proyectoId, file, nombreEvidencia) => {
   const formData = new FormData();
@@ -30,10 +30,10 @@ export const uploadEvidence = async (proyectoId, file, nombreEvidencia) => {
 };
 
 /**
- * Get all evidence for a project.
+ * Obtiene todas las evidencias de un proyecto.
  * 
- * @param {number} proyectoId - Project ID
- * @returns {Promise<Array>} List of evidence
+ * @param {number} proyectoId - ID del proyecto
+ * @returns {Promise<Array>} Devuelve una lista de evidencias
  */
 export const getProjectEvidence = async (proyectoId) => {
   const response = await api.get(`/evidencias/?proyecto=${proyectoId}`);
@@ -41,10 +41,10 @@ export const getProjectEvidence = async (proyectoId) => {
 };
 
 /**
- * Get a specific evidence by ID.
+ * Obtiene los datos de una evidencia específica por su ID.
  * 
- * @param {number} evidenceId - Evidence ID
- * @returns {Promise<Object>} Evidence data
+ * @param {number} evidenceId - ID de la evidencia
+ * @returns {Promise<Object>} Devuelve los datos de la evidencia
  */
 export const getEvidence = async (evidenceId) => {
   const response = await api.get(`/evidencias/${evidenceId}/`);
@@ -52,11 +52,11 @@ export const getEvidence = async (evidenceId) => {
 };
 
 /**
- * Link evidence to a transaction.
+ * Vincula una evidencia a una transacción.
  * 
- * @param {number} transactionId - Transaction ID
- * @param {number} evidenceId - Evidence ID
- * @returns {Promise<Object>} Created link
+ * @param {number} transactionId - ID de la transacción
+ * @param {number} evidenceId - ID de la evidencia
+ * @returns {Promise<Object>} Devuelve el vínculo creado
  */
 export const linkEvidenceToTransaction = async (transactionId, evidenceId) => {
   const response = await api.post('/transacciones-evidencias/', {
@@ -67,9 +67,9 @@ export const linkEvidenceToTransaction = async (transactionId, evidenceId) => {
 };
 
 /**
- * Unlink evidence from a transaction.
+ * Desvincula una evidencia de una transacción.
  * 
- * @param {number} linkId - Transaction-Evidence link ID
+ * @param {number} linkId - ID del vínculo transacción-evidencia
  * @returns {Promise<void>}
  */
 export const unlinkEvidenceFromTransaction = async (linkId) => {
@@ -77,10 +77,10 @@ export const unlinkEvidenceFromTransaction = async (linkId) => {
 };
 
 /**
- * Get evidence linked to a transaction.
+ * Obtiene todas las evidencias vinculadas a una transacción.
  * 
- * @param {number} transactionId - Transaction ID
- * @returns {Promise<Array>} List of linked evidence
+ * @param {number} transactionId - ID de la transacción
+ * @returns {Promise<Array>} Devuelve una lista de evidencias vinculadas
  */
 export const getTransactionEvidence = async (transactionId) => {
   const response = await api.get(`/transacciones-evidencias/?transaccion=${transactionId}`);
@@ -88,14 +88,14 @@ export const getTransactionEvidence = async (transactionId) => {
 };
 
 /**
- * Soft delete evidence (logical deletion).
+ * Realiza el borrado lógico (eliminación suave) de una evidencia.
  * 
- * @param {number} evidenceId - Evidence ID
- * @returns {Promise<Object>} Updated evidence
+ * @param {number} evidenceId - ID de la evidencia
+ * @returns {Promise<Object>} Devuelve la evidencia actualizada
  */
+// Esto debería llamar a un endpoint personalizado para borrado lógico.
+// Por ahora, realiza un patch para marcar la evidencia como eliminada.
 export const deleteEvidence = async (evidenceId) => {
-  // Note: This should call a custom endpoint for soft delete
-  // For now, we'll use a patch to mark as deleted
   const response = await api.patch(`/evidencias/${evidenceId}/`, {
     eliminado: true,
   });

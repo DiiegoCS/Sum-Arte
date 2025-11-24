@@ -15,10 +15,10 @@ function App() {
       <BrowserRouter>
         <div className="App">
           <Routes>
-            {/* Public route */}
+            {/* Ruta pública de inicio de sesión */}
             <Route path="/login" element={<Login />} />
             
-            {/* Protected routes */}
+            {/* La aplicación encapsula las rutas protegidas que requieren autenticación */}
             <Route
               path="/"
               element={
@@ -53,7 +53,7 @@ function App() {
               }
             />
             
-            {/* Default redirect */}
+            {/* Si la ruta no existe, la aplicación redirige al usuario al inicio */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>

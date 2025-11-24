@@ -1,7 +1,7 @@
 /**
- * Authentication Context for Sum-Arte.
+ * Contexto de autenticación para Sum-Arte.
  * 
- * Provides authentication state and methods throughout the application.
+ * Proporciona el estado de autenticación y los métodos asociados a toda la aplicación.
  */
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
@@ -10,17 +10,17 @@ import { login as authLogin, logout as authLogout, getCurrentUser, isAuthenticat
 const AuthContext = createContext(null);
 
 /**
- * AuthProvider component that wraps the application.
+ * Componente AuthProvider que envuelve la aplicación.
  * 
- * @param {Object} props - Component props
- * @param {ReactNode} props.children - Child components
+ * @param {Object} props - Propiedades del componente
+ * @param {ReactNode} props.children - Componentes hijos
  */
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already logged in
+    // Verifica si ya hay un usuario autenticado al cargar la aplicación
     const checkAuth = () => {
       if (isAuthenticated()) {
         const currentUser = getCurrentUser();
@@ -35,10 +35,10 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   /**
-   * Login function.
+   * Función para iniciar sesión.
    * 
-   * @param {string} username - User's username
-   * @param {string} password - User's password
+   * @param {string} username - Nombre de usuario
+   * @param {string} password - Contraseña del usuario
    * @returns {Promise<void>}
    */
   const login = async (username, password) => {
@@ -52,7 +52,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   /**
-   * Logout function.
+   * Función para cerrar sesión.
    */
   const logout = () => {
     authLogout();
@@ -71,14 +71,14 @@ export const AuthProvider = ({ children }) => {
 };
 
 /**
- * Hook to use authentication context.
+ * Hook para utilizar el contexto de autenticación.
  * 
- * @returns {Object} Authentication context value
+ * @returns {Object} Valor del contexto de autenticación
  */
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error('useAuth debe ser usado dentro de un AuthProvider');
   }
   return context;
 };

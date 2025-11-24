@@ -1,17 +1,17 @@
 /**
- * Transaction service for Sum-Arte frontend.
+ * Servicio de transacciones para el frontend de Sum-Arte.
  * 
- * Handles all transaction-related API calls including CRUD operations
- * and approval/rejection workflows.
+ * Gestiona todas las llamadas a la API relacionadas con transacciones, incluyendo operaciones CRUD
+ * y flujos de aprobación o rechazo.
  */
 
 import api from './api';
 
 /**
- * Get all transactions.
+ * Obtiene todas las transacciones.
  * 
- * @param {Object} filters - Optional filters (proyecto, estado_transaccion, etc.)
- * @returns {Promise<Array>} List of transactions
+ * @param {Object} filters - Filtros opcionales (proyecto, estado_transaccion, etc.)
+ * @returns {Promise<Array>} Retorna una lista de transacciones
  */
 export const getTransactions = async (filters = {}) => {
   const params = new URLSearchParams();
@@ -26,10 +26,10 @@ export const getTransactions = async (filters = {}) => {
 };
 
 /**
- * Get a specific transaction by ID.
+ * Obtiene una transacción específica según su ID.
  * 
- * @param {number} transactionId - Transaction ID
- * @returns {Promise<Object>} Transaction data
+ * @param {number} transactionId - ID de la transacción
+ * @returns {Promise<Object>} Retorna los datos de la transacción
  */
 export const getTransaction = async (transactionId) => {
   const response = await api.get(`/transacciones/${transactionId}/`);
@@ -37,10 +37,10 @@ export const getTransaction = async (transactionId) => {
 };
 
 /**
- * Create a new transaction.
+ * Crea una nueva transacción.
  * 
- * @param {Object} transactionData - Transaction data
- * @returns {Promise<Object>} Created transaction
+ * @param {Object} transactionData - Datos de la transacción
+ * @returns {Promise<Object>} Retorna la transacción creada
  */
 export const createTransaction = async (transactionData) => {
   const response = await api.post('/transacciones/', transactionData);
@@ -48,11 +48,11 @@ export const createTransaction = async (transactionData) => {
 };
 
 /**
- * Update a transaction.
+ * Actualiza una transacción existente.
  * 
- * @param {number} transactionId - Transaction ID
- * @param {Object} transactionData - Updated transaction data
- * @returns {Promise<Object>} Updated transaction
+ * @param {number} transactionId - ID de la transacción
+ * @param {Object} transactionData - Datos actualizados de la transacción
+ * @returns {Promise<Object>} Retorna la transacción actualizada
  */
 export const updateTransaction = async (transactionId, transactionData) => {
   const response = await api.patch(`/transacciones/${transactionId}/`, transactionData);
@@ -60,9 +60,9 @@ export const updateTransaction = async (transactionId, transactionData) => {
 };
 
 /**
- * Delete a transaction.
+ * Elimina una transacción.
  * 
- * @param {number} transactionId - Transaction ID
+ * @param {number} transactionId - ID de la transacción
  * @returns {Promise<void>}
  */
 export const deleteTransaction = async (transactionId) => {
@@ -70,10 +70,10 @@ export const deleteTransaction = async (transactionId) => {
 };
 
 /**
- * Approve a transaction.
+ * Aprueba una transacción.
  * 
- * @param {number} transactionId - Transaction ID
- * @returns {Promise<Object>} Approved transaction
+ * @param {number} transactionId - ID de la transacción
+ * @returns {Promise<Object>} Retorna la transacción aprobada
  */
 export const approveTransaction = async (transactionId) => {
   const response = await api.post(`/transacciones/${transactionId}/approve/`);
@@ -81,11 +81,11 @@ export const approveTransaction = async (transactionId) => {
 };
 
 /**
- * Reject a transaction.
+ * Rechaza una transacción.
  * 
- * @param {number} transactionId - Transaction ID
- * @param {string} motivo - Rejection reason (optional)
- * @returns {Promise<Object>} Rejected transaction
+ * @param {number} transactionId - ID de la transacción
+ * @param {string} motivo - Motivo del rechazo (opcional)
+ * @returns {Promise<Object>} Retorna la transacción rechazada
  */
 export const rejectTransaction = async (transactionId, motivo = null) => {
   const response = await api.post(`/transacciones/${transactionId}/reject/`, {
@@ -95,10 +95,10 @@ export const rejectTransaction = async (transactionId, motivo = null) => {
 };
 
 /**
- * Get pending transactions for approval.
+ * Obtiene las transacciones pendientes para aprobación.
  * 
- * @param {number} proyectoId - Optional project ID filter
- * @returns {Promise<Array>} List of pending transactions
+ * @param {number} proyectoId - Filtro opcional por ID de proyecto
+ * @returns {Promise<Array>} Retorna una lista de transacciones pendientes
  */
 export const getPendingTransactions = async (proyectoId = null) => {
   const params = proyectoId ? `?proyecto=${proyectoId}` : '';
