@@ -1,6 +1,8 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from . import views 
+from .authentication import CustomTokenObtainPairView
 
 # Crea un router
 router = DefaultRouter()
@@ -18,9 +20,16 @@ router.register(r'transacciones-evidencias', views.TransaccionEvidenciaViewSet, 
 router.register(r'logs-transacciones', views.LogTransaccionViewSet, basename='logtransaccion')
 router.register(r'items-presupuestarios', views.ItemPresupuestarioViewSet, basename='itempresupuestario')
 router.register(r'subitems-presupuestarios', views.SubitemPresupuestarioViewSet, basename='subitempresupuestario')
+router.register(r'dashboard', views.DashboardViewSet, basename='dashboard')
 
 
 # Las URLs de la API ahora son determinadas por el router.
 urlpatterns = [
+    # JWT Authentication endpoints
+    path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+    
+    # API endpoints
     path('', include(router.urls)),
 ]

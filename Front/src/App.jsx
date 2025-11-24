@@ -1,32 +1,64 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import './App.css'; // estilos
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import Navbar from './components/Navbar';
+import './App.css';
 import Dashboard from './pages/Dashboard';
 import ProjectDetails from './pages/ProjectDetails';
 import RegisterExpense from './pages/RegisterExpense';
+import Login from './pages/Login';
 
 function App() {
-  
-  // App ahora solo se encarga de definir las rutas
   return (
-    <BrowserRouter>
-      <div className="App">
-        <header className="App-header">
-          <h1>Proyectos de Sum-Arte</h1> {/* Título principal */}
-          
+    <AuthProvider>
+      <BrowserRouter>
+        <div className="App">
           <Routes>
-            {/* Ruta principal "/" */}
-            <Route path="/" element={<Dashboard />} />
-            {/* Ruta para detalles del proyecto "/proyecto/:id" */}
-            <Route path="/proyecto/:id" element={<ProjectDetails />} />
-            {/* Ruta para registrar un nuevo gasto "/registrar-gasto" */}
-            <Route path="/registrar-gasto/" element={<RegisterExpense />} />
-          
+            {/* Public route */}
+            <Route path="/login" element={<Login />} />
+            
+            {/* Protected routes */}
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <>
+                    <Navbar />
+                    <Dashboard />
+                  </>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/proyecto/:id"
+              element={
+                <ProtectedRoute>
+                  <>
+                    <Navbar />
+                    <ProjectDetails />
+                  </>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/registrar-gasto"
+              element={
+                <ProtectedRoute>
+                  <>
+                    <Navbar />
+                    <RegisterExpense />
+                  </>
+                </ProtectedRoute>
+              }
+            />
+            
+            {/* Default redirect */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-
-        </header>
-      </div>
-    </BrowserRouter>
+        </div>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 
