@@ -290,3 +290,5 @@ docker-compose restart frontend
 **Última actualización:** 2025-11-24
 **Estado del proyecto:** En desarrollo activo - Fase 1 completada
 
+
+

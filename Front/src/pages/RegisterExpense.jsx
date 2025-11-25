@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { getProjects, getBudgetItems, getSubitems } from '../services/projectService';
 import { createTransaction } from '../services/transactionService';
 import { uploadEvidence, linkEvidenceToTransaction } from '../services/evidenceService';
-import { createProvider } from '../services/providerService';
+import { createProvider, getProviders } from '../services/providerService';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -67,20 +67,23 @@ const RegisterExpense = () => {
   }, [formData.item_presupuestario]);
 
   /**
-   * Carga los proyectos disponibles al momento de montar el componente.
+   * Carga los proyectos y proveedores disponibles al momento de montar el componente.
    */
   const cargarDatosIniciales = async () => {
     try {
-      const proyectosData = await getProjects();
-      // Asegurar que sea un array
+      const [proyectosData, proveedoresData] = await Promise.all([
+        getProjects(),
+        getProviders(),
+      ]);
+      
+      // Asegurar que sean arrays
       setProyectos(Array.isArray(proyectosData) ? proyectosData : []);
-
-      // En esta sección se cargarían proveedores (se debe implementar el servicio de proveedores)
-      // Por ahora, el formulario los gestiona manualmente.
+      setProveedores(Array.isArray(proveedoresData) ? proveedoresData : []);
     } catch (error) {
       toast.error('Ha ocurrido un error al cargar los datos iniciales');
       console.error('Error al cargar datos iniciales:', error);
       setProyectos([]);
+      setProveedores([]);
     }
   };
 
@@ -355,7 +358,11 @@ const RegisterExpense = () => {
                       required
                     >
                       <option value="">Seleccione un proveedor...</option>
-                      {/* Aquí se mostrarían los proveedores cargados */}
+                      {Array.isArray(proveedores) && proveedores.map(proveedor => (
+                        <option key={proveedor.id} value={proveedor.id}>
+                          {proveedor.nombre_proveedor} ({proveedor.rut_proveedor})
+                        </option>
+                      ))}
                     </select>
                   ) : (
                     <div className="row">

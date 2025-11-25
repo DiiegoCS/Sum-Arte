@@ -22,7 +22,8 @@ export const getTransactions = async (filters = {}) => {
   });
   
   const response = await api.get(`/transacciones/?${params.toString()}`);
-  return response.data;
+  // La API devuelve datos paginados, extraemos el array de results
+  return response.data.results || response.data;
 };
 
 /**

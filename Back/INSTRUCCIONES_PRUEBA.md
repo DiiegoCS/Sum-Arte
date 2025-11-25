@@ -140,3 +140,5 @@ Una vez que hayas verificado que todo funciona:
 2. Probar el flujo completo: crear transacción → aprobar → ver en dashboard
 3. Continuar con las funcionalidades pendientes según el plan
 
+
+

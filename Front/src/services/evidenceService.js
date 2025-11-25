@@ -33,11 +33,18 @@ export const uploadEvidence = async (proyectoId, file, nombreEvidencia) => {
  * Obtiene todas las evidencias de un proyecto.
  * 
  * @param {number} proyectoId - ID del proyecto
+ * @param {boolean} incluirEliminadas - Si incluir evidencias eliminadas (soft delete)
  * @returns {Promise<Array>} Devuelve una lista de evidencias
  */
-export const getProjectEvidence = async (proyectoId) => {
-  const response = await api.get(`/evidencias/?proyecto=${proyectoId}`);
-  return response.data;
+export const getProjectEvidence = async (proyectoId, incluirEliminadas = false) => {
+  const params = new URLSearchParams();
+  params.append('proyecto', proyectoId);
+  if (incluirEliminadas) {
+    params.append('incluir_eliminadas', 'true');
+  }
+  const response = await api.get(`/evidencias/?${params.toString()}`);
+  // La API devuelve datos paginados, extraemos el array de results
+  return response.data.results || response.data;
 };
 
 /**
@@ -84,21 +91,29 @@ export const unlinkEvidenceFromTransaction = async (linkId) => {
  */
 export const getTransactionEvidence = async (transactionId) => {
   const response = await api.get(`/transacciones-evidencias/?transaccion=${transactionId}`);
-  return response.data;
+  // La API devuelve datos paginados, extraemos el array de results
+  return response.data.results || response.data;
 };
 
 /**
  * Realiza el borrado lógico (eliminación suave) de una evidencia.
  * 
  * @param {number} evidenceId - ID de la evidencia
- * @returns {Promise<Object>} Devuelve la evidencia actualizada
+ * @returns {Promise<Object>} Devuelve mensaje de confirmación
  */
-// Esto debería llamar a un endpoint personalizado para borrado lógico.
-// Por ahora, realiza un patch para marcar la evidencia como eliminada.
 export const deleteEvidence = async (evidenceId) => {
-  const response = await api.patch(`/evidencias/${evidenceId}/`, {
-    eliminado: true,
-  });
+  const response = await api.delete(`/evidencias/${evidenceId}/`);
+  return response.data;
+};
+
+/**
+ * Restaura una evidencia que fue eliminada lógicamente.
+ * 
+ * @param {number} evidenceId - ID de la evidencia
+ * @returns {Promise<Object>} Devuelve la evidencia restaurada
+ */
+export const restoreEvidence = async (evidenceId) => {
+  const response = await api.post(`/evidencias/${evidenceId}/restaurar/`);
   return response.data;
 };
 

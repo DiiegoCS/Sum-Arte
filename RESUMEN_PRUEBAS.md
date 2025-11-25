@@ -208,3 +208,5 @@ Una vez que verifiques que todo funciona:
 - Revisa los logs si algo no funciona
 - Los tokens JWT se guardan en localStorage (puedes verlos en DevTools)
 
+
+

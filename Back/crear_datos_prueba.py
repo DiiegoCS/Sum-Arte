@@ -160,3 +160,5 @@ print(f"\nProyecto: {proyecto.nombre_proyecto}")
 print(f"Organización: {org.nombre_organizacion}")
 print("\nPuedes iniciar sesión en el frontend con cualquiera de estos usuarios.")
 
+
+
