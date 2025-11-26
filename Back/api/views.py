@@ -54,6 +54,85 @@ class ProyectoViewSet(viewsets.ModelViewSet):
             return Proyecto.objects.all()
         else:
             return Proyecto.objects.filter(id_organizacion=self.request.user.id_organizacion)
+    
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, IsOrganizationMember])
+    def pre_rendicion(self, request, pk=None):
+        """
+        Valida la integridad del proyecto antes de cerrar la rendición (C008).
+        
+        Retorna un diccionario con errores y advertencias encontradas.
+        """
+        from rest_framework.response import Response
+        from rest_framework import status
+        from .services import RenditionService
+        
+        proyecto = self.get_object()
+        
+        # Valida permisos de organización
+        if not request.user.is_superuser:
+            if proyecto.id_organizacion != request.user.id_organizacion:
+                return Response(
+                    {'error': 'No tiene permiso para acceder a este proyecto.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        try:
+            resultado = RenditionService.generar_pre_rendicion(proyecto)
+            
+            # Obtener información adicional para el frontend
+            from .models import Transaccion
+            transacciones = Transaccion.objects.filter(proyecto=proyecto)
+            
+            resultado['resumen'] = {
+                'total_transacciones': transacciones.count(),
+                'pendientes': transacciones.filter(estado_transaccion='pendiente').count(),
+                'aprobadas': transacciones.filter(estado_transaccion='aprobado').count(),
+                'rechazadas': transacciones.filter(estado_transaccion='rechazado').count(),
+            }
+            
+            return Response(resultado, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsAdminProyecto])
+    def cerrar_rendicion(self, request, pk=None):
+        """
+        Cierra la rendición del proyecto, bloqueando ediciones futuras (C005, C011).
+        
+        Requiere que el proyecto pase todas las validaciones de integridad.
+        """
+        from rest_framework.response import Response
+        from rest_framework import status
+        from .services import RenditionService
+        
+        proyecto = self.get_object()
+        
+        # Valida permisos de organización
+        if not request.user.is_superuser:
+            if proyecto.id_organizacion != request.user.id_organizacion:
+                return Response(
+                    {'error': 'No tiene permiso para acceder a este proyecto.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        try:
+            proyecto_cerrado = RenditionService.cerrar_rendicion(proyecto, request.user)
+            serializer = self.get_serializer(proyecto_cerrado)
+            return Response(
+                {
+                    'message': 'Rendición cerrada exitosamente. El proyecto ahora está bloqueado para ediciones.',
+                    'proyecto': serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class UsuarioViewSet(viewsets.ModelViewSet):
@@ -348,6 +427,7 @@ class EvidenciaViewSet(viewsets.ModelViewSet):
         """
         Crea una nueva evidencia con validaciones de archivo (C010).
         
+        Sube el archivo a Supabase Storage y guarda la referencia en la base de datos.
         Valida:
         - Tipo de archivo permitido
         - Tamaño máximo del archivo
@@ -355,9 +435,8 @@ class EvidenciaViewSet(viewsets.ModelViewSet):
         """
         from rest_framework.response import Response
         from rest_framework import status
-        from django.core.exceptions import ValidationError
         from .constants import ALLOWED_EVIDENCE_TYPES, MAX_EVIDENCE_FILE_SIZE
-        from .validators import validar_almacenamiento_respaldo
+        from .storage_service import get_storage_service
         
         # Valida el archivo antes de procesar
         archivo = request.FILES.get('archivo_evidencia')
@@ -384,27 +463,45 @@ class EvidenciaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Prepara los datos para el serializer
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        # Asigna automáticamente el usuario que carga la evidencia
-        evidencia = serializer.save(usuario_carga=request.user)
-        
-        # Valida el almacenamiento con respaldo (C010)
         try:
-            validar_almacenamiento_respaldo(evidencia)
-        except ValidationError as e:
-            # Si falla la validación, elimina el archivo subido
-            evidencia.archivo_evidencia.delete()
-            evidencia.delete()
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
+            # Sube el archivo a Supabase Storage
+            storage_service = get_storage_service()
+            nombre_evidencia = request.data.get('nombre_evidencia', archivo.name)
+            
+            upload_result = storage_service.upload_file(
+                file=archivo,
+                file_name=nombre_evidencia,
+                folder='evidencias',
+                content_type=tipo_archivo
             )
-        
-        response_serializer = self.get_serializer(evidencia)
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+            
+            # Prepara los datos para el serializer (sin el archivo, ya que está en Supabase)
+            data = request.data.copy()
+            data['archivo_path'] = upload_result['path']
+            data['archivo_url'] = upload_result['url']
+            data['tipo_archivo'] = tipo_archivo
+            
+            serializer = self.get_serializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            
+            # Asigna automáticamente el usuario que carga la evidencia
+            evidencia = serializer.save(usuario_carga=request.user)
+            
+            response_serializer = self.get_serializer(evidencia)
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+            
+        except ValueError as e:
+            # Error de configuración de Supabase
+            return Response(
+                {'error': f'Error de configuración: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except Exception as e:
+            # Error al subir el archivo
+            return Response(
+                {'error': f'Error al subir el archivo: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     def destroy(self, request, *args, **kwargs):
         """

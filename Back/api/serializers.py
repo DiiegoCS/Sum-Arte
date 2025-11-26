@@ -106,38 +106,89 @@ class EvidenciaSerializer(serializers.ModelSerializer):
         model = Evidencia
         fields = '__all__'
         read_only_fields = ['fecha_carga', 'version', 'usuario_carga']
+        extra_kwargs = {
+            'archivo_path': {'write_only': True},
+        }
     
     def get_archivo_url(self, obj):
-        """Obtiene la URL completa del archivo de evidencia."""
-        if obj.archivo_evidencia:
+        """Obtiene la URL del archivo en Supabase Storage o del almacenamiento local."""
+        # Prioridad 1: Si ya tiene archivo_url guardada (Supabase), usarla
+        if hasattr(obj, 'archivo_url') and obj.archivo_url:
+            return obj.archivo_url
+        
+        # Prioridad 2: Si tiene archivo_path pero no URL, generar una nueva URL de Supabase
+        if hasattr(obj, 'archivo_path') and obj.archivo_path:
+            try:
+                from .storage_service import get_storage_service
+                storage_service = get_storage_service()
+                return storage_service.get_public_url(obj.archivo_path)
+            except:
+                pass
+        
+        # Prioridad 3: Si tiene archivo_evidencia (almacenamiento local legacy), usar esa URL
+        if hasattr(obj, 'archivo_evidencia') and obj.archivo_evidencia:
             request = self.context.get('request')
             if request:
                 return request.build_absolute_uri(obj.archivo_evidencia.url)
             return obj.archivo_evidencia.url
+        
         return None
     
     def get_tamanio_archivo(self, obj):
-        """Obtiene el tamaño en bytes del archivo de evidencia."""
-        if obj.archivo_evidencia:
-            try:
-                return obj.archivo_evidencia.size
-            except:
-                return None
+        """
+        Obtiene el tamaño del archivo.
+        
+        Nota: Con Supabase Storage, el tamaño no está disponible directamente
+        en el modelo. Se podría obtener haciendo una petición a Supabase,
+        pero por ahora retornamos None para evitar llamadas adicionales.
+        """
+        # Con Supabase, el tamaño no está disponible directamente
+        # Se podría obtener de los metadatos de Supabase si es necesario
         return None
 
 class TransaccionEvidenciaSerializer(serializers.ModelSerializer):
     """Serializador para la relación transacción-evidencia."""
     
     evidencia = EvidenciaSerializer(read_only=True)
+    # Aceptar 'evidencia' directamente (ID) para compatibilidad con el frontend
     evidencia_id = serializers.PrimaryKeyRelatedField(
         queryset=Evidencia.objects.filter(eliminado=False),
         source='evidencia',
-        write_only=True
+        write_only=True,
+        required=False
     )
     
     class Meta:
         model = Transaccion_Evidencia
         fields = '__all__'
+    
+    def to_internal_value(self, data):
+        """Permite aceptar 'evidencia' como campo de entrada además de 'evidencia_id'."""
+        # Si viene 'evidencia' en lugar de 'evidencia_id', lo mapeamos
+        if 'evidencia' in data and 'evidencia_id' not in data:
+            data = data.copy()
+            data['evidencia_id'] = data.pop('evidencia')
+        return super().to_internal_value(data)
+    
+    def create(self, validated_data):
+        """Crea la relación transacción-evidencia."""
+        # Verificar que no exista ya esta relación
+        transaccion = validated_data.get('transaccion')
+        evidencia = validated_data.get('evidencia')
+        
+        if transaccion and evidencia:
+            # Verificar si ya existe esta relación
+            existe = Transaccion_Evidencia.objects.filter(
+                transaccion=transaccion,
+                evidencia=evidencia
+            ).exists()
+            
+            if existe:
+                raise serializers.ValidationError({
+                    'evidencia': 'Esta evidencia ya está vinculada a esta transacción.'
+                })
+        
+        return super().create(validated_data)
 
 class LogTransaccionSerializer(serializers.ModelSerializer):
     """Serializador para logs de transacciones."""
@@ -178,6 +229,7 @@ class TransaccionSerializer(serializers.ModelSerializer):
     
     # Se muestran las evidencias vinculadas a la transacción
     evidencias = serializers.SerializerMethodField()
+    cantidad_evidencias = serializers.SerializerMethodField()
     
     # Se muestran los logs relacionados a la transacción
     logs = LogTransaccionSerializer(many=True, read_only=True)
@@ -205,6 +257,13 @@ class TransaccionSerializer(serializers.ModelSerializer):
             many=True,
             context=self.context
         ).data
+    
+    def get_cantidad_evidencias(self, obj):
+        """Obtiene el conteo de evidencias activas asociadas a la transacción."""
+        return Transaccion_Evidencia.objects.filter(
+            transaccion=obj,
+            evidencia__eliminado=False
+        ).count()
     
     def get_puede_editar(self, obj):
         """Indica si la transacción puede ser editada actualmente."""

@@ -167,9 +167,20 @@ const ProjectDetails = () => {
           <h1>{proyecto.nombre_proyecto}</h1>
           <p className="text-muted">Estado: {proyecto.estado_display || proyecto.estado_proyecto}</p>
         </div>
-        <button className="btn btn-secondary" onClick={() => navigate('/')}>
-          Volver al Dashboard
-        </button>
+        <div className="btn-group">
+          <button className="btn btn-secondary" onClick={() => navigate('/')}>
+            Volver al Dashboard
+          </button>
+          {/* Botón para pre-rendición (solo si el proyecto no está cerrado) */}
+          {proyecto.estado_proyecto !== 'completado' && proyecto.estado_proyecto !== 'cerrado' && (
+            <button 
+              className="btn btn-primary" 
+              onClick={() => navigate(`/proyecto/${id}/pre-rendicion`)}
+            >
+              Pre-Rendición
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tarjetas de estadísticas */}
@@ -311,7 +322,9 @@ const ProjectDetails = () => {
                               className="btn btn-sm btn-outline-info"
                               onClick={() => toggleEvidencias(transaccion.id)}
                             >
-                              {evidenciasTrans.length} archivo(s)
+                              {transaccion.cantidad_evidencias !== undefined 
+                                ? transaccion.cantidad_evidencias 
+                                : evidenciasTrans.length} archivo(s)
                             </button>
                           </td>
                           <td>

@@ -322,9 +322,9 @@ def validar_almacenamiento_respaldo(evidencia):
     """
     Control C010: Almacenamiento con respaldo.
     
-    Valida que la evidencia se almacene correctamente con respaldo.
-    Esta validación se realiza principalmente a nivel de sistema de archivos,
-    pero podemos validar que el archivo existe y es accesible.
+    Valida que la evidencia se almacene correctamente con respaldo en Supabase Storage
+    o en almacenamiento local (para compatibilidad con evidencias antiguas).
+    Verifica que el archivo existe y es accesible.
     
     Args:
         evidencia: Instancia de Evidencia a validar
@@ -332,12 +332,28 @@ def validar_almacenamiento_respaldo(evidencia):
     Raises:
         ValidationError: Si hay problemas con el almacenamiento
     """
-    if not evidencia.archivo_evidencia:
-        raise ValidationError("La evidencia debe tener un archivo asociado.")
+    # Validar Supabase Storage (nuevo sistema)
+    if hasattr(evidencia, 'archivo_path') and evidencia.archivo_path:
+        try:
+            from .storage_service import get_storage_service
+            storage_service = get_storage_service()
+            if not storage_service.file_exists(evidencia.archivo_path):
+                raise ValidationError("El archivo de evidencia no se encuentra en Supabase Storage.")
+            return True
+        except ImportError:
+            # Si no está configurado Supabase, validar que existe el path
+            if not evidencia.archivo_path:
+                raise ValidationError("La evidencia debe tener un archivo asociado.")
+            return True
+        except Exception as e:
+            raise ValidationError(f"Error al validar el almacenamiento: {str(e)}")
     
-    # Verificar que el archivo existe
-    if not evidencia.archivo_evidencia.storage.exists(evidencia.archivo_evidencia.name):
-        raise ValidationError("El archivo de evidencia no se encuentra en el almacenamiento.")
+    # Validar almacenamiento local (sistema legacy)
+    if hasattr(evidencia, 'archivo_evidencia') and evidencia.archivo_evidencia:
+        if not evidencia.archivo_evidencia.storage.exists(evidencia.archivo_evidencia.name):
+            raise ValidationError("El archivo de evidencia no se encuentra en el almacenamiento local.")
+        return True
     
-    return True
+    # Si no tiene ningún archivo
+    raise ValidationError("La evidencia debe tener un archivo asociado.")
 
