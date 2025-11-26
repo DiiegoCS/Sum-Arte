@@ -10,24 +10,28 @@ from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.decorators import action
 from .models import (Proyecto, Organizacion, Usuario, Rol, Usuario_Rol_Proyecto, Proveedor, Transaccion,
-                     Item_Presupuestario, Subitem_Presupuestario, Evidencia, Transaccion_Evidencia, Log_transaccion)
+                     Item_Presupuestario, Subitem_Presupuestario, Evidencia, Transaccion_Evidencia, Log_transaccion,
+                     InvitacionUsuario)
 from .serializers import (ProyectoSerializer, OrganizacionSerializer,UsuarioSerializer, UsuarioRolProyectoSerializer, ProveedorSerializer, 
                           TransaccionSerializer, EvidenciaSerializer, TransaccionEvidenciaSerializer,
                           LogTransaccionSerializer, ItemPresupuestarioSerializer, SubitemPresupuestarioSerializer, 
-                          RolSerializer)
+                          RolSerializer, InvitacionUsuarioSerializer, AceptarInvitacionSerializer,
+                          EquipoProyectoSerializer, AgregarUsuarioEquipoSerializer, CambiarRolEquipoSerializer)
 from .permissions import (IsOrganizationMember, IsAdminProyecto, IsEjecutor, 
                          IsAdminProyectoOrEjecutor, CanApproveTransaction, CanCreateTransaction)
+from .utils import validar_rut_chileno
 
 class OrganizacionViewSet(viewsets.ModelViewSet):
     """
     ViewSet para gestionar organizaciones.
     
-    Solo los superusuarios pueden crear/editar organizaciones.
-    Los usuarios regulares solo pueden ver su propia organización.
+    - Los usuarios sin organización pueden crear una nueva organización.
+    - Los usuarios con organización solo pueden ver/editar la suya.
+    - Los superusuarios pueden ver/editar todas las organizaciones.
     """
     queryset = Organizacion.objects.all()
     serializer_class = OrganizacionSerializer
-    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
         """Filtra las organizaciones según la organización del usuario."""
@@ -35,7 +39,94 @@ class OrganizacionViewSet(viewsets.ModelViewSet):
             return Organizacion.objects.all()
         if self.request.user.id_organizacion:
             return Organizacion.objects.filter(id=self.request.user.id_organizacion.id)
-        return Organizacion.objects.none()
+        # Usuarios sin organización pueden ver todas (para seleccionar al crear)
+        return Organizacion.objects.all()
+    
+    def get_permissions(self):
+        """
+        Permisos dinámicos según la acción.
+        
+        - create: Cualquier usuario autenticado puede crear (si no tiene organización)
+        - list/retrieve: Usuarios pueden ver su organización o todas si no tienen una
+        - update/partial_update/delete: Solo si pertenece a la organización o es superusuario
+        """
+        if self.action == 'create':
+            # Permitir crear a cualquier usuario autenticado
+            return [IsAuthenticated()]
+        elif self.action in ['update', 'partial_update', 'destroy']:
+            # Para editar/eliminar, verificar que pertenezca a la organización
+            return [IsAuthenticated(), IsOrganizationMember()]
+        # Para list y retrieve, solo autenticación
+        return [IsAuthenticated()]
+    
+    def perform_create(self, serializer):
+        """
+        Crea la organización y asigna el estado inicial.
+        
+        Si el usuario no tiene organización, se le asigna automáticamente.
+        """
+        from django.utils import timezone
+        
+        # Establecer estado inicial de suscripción
+        organizacion = serializer.save(
+            estado_suscripcion='inactivo'  # Se activa manualmente o por proceso de pago
+        )
+        
+        # Si el usuario no tiene organización, asignarle la recién creada
+        if not self.request.user.id_organizacion:
+            self.request.user.id_organizacion = organizacion
+            self.request.user.save()
+    
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def verificar_rut(self, request):
+        """
+        Verifica si un RUT está disponible para registro.
+        
+        Query params:
+            rut: RUT a verificar
+            
+        Returns:
+            {
+                "disponible": bool,
+                "rut": str,
+                "mensaje": str
+            }
+        """
+        from rest_framework.response import Response
+        from rest_framework import status
+        
+        rut = request.query_params.get('rut', '').strip()
+        
+        if not rut:
+            return Response(
+                {'error': 'El parámetro "rut" es requerido.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validar formato de RUT
+        es_valido, rut_limpio, mensaje_error = validar_rut_chileno(rut)
+        
+        if not es_valido:
+            return Response(
+                {
+                    'disponible': False,
+                    'rut': rut,
+                    'mensaje': mensaje_error
+                },
+                status=status.HTTP_200_OK
+            )
+        
+        # Verificar disponibilidad
+        existe = Organizacion.objects.filter(rut_organizacion=rut_limpio).exists()
+        
+        return Response(
+            {
+                'disponible': not existe,
+                'rut': rut_limpio,
+                'mensaje': 'RUT disponible.' if not existe else 'Este RUT ya está registrado.'
+            },
+            status=status.HTTP_200_OK
+        )
 
 
 class ProyectoViewSet(viewsets.ModelViewSet):
@@ -133,6 +224,286 @@ class ProyectoViewSet(viewsets.ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+    
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, IsOrganizationMember])
+    def equipo(self, request, pk=None):
+        """
+        Obtiene la lista de usuarios del equipo del proyecto con sus roles.
+        
+        Returns:
+            Lista de usuarios con sus roles en el proyecto
+        """
+        from rest_framework.response import Response
+        from rest_framework import status
+        from collections import defaultdict
+        
+        proyecto = self.get_object()
+        
+        # Valida permisos de organización
+        if not request.user.is_superuser:
+            if proyecto.id_organizacion != request.user.id_organizacion:
+                return Response(
+                    {'error': 'No tiene permiso para acceder a este proyecto.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Obtener todas las asignaciones de usuario-rol-proyecto para este proyecto
+        asignaciones = Usuario_Rol_Proyecto.objects.filter(
+            proyecto=proyecto
+        ).select_related('usuario', 'rol').order_by('usuario__username', 'rol__nombre_rol')
+        
+        # Agrupar por usuario
+        equipo_dict = {}
+        for asignacion in asignaciones:
+            usuario_id = asignacion.usuario.id
+            if usuario_id not in equipo_dict:
+                equipo_dict[usuario_id] = {
+                    'usuario': asignacion.usuario,
+                    'proyecto': proyecto,
+                    'roles': []
+                }
+            equipo_dict[usuario_id]['roles'].append(asignacion.rol)
+        
+        # Convertir a lista y serializar
+        equipo_lista = []
+        for usuario_id, datos in equipo_dict.items():
+            # Crear un objeto temporal con la primera asignación para el serializer
+            primera_asignacion = asignaciones.filter(usuario_id=usuario_id).first()
+            serializer = EquipoProyectoSerializer(primera_asignacion)
+            equipo_lista.append(serializer.data)
+        
+        return Response(equipo_lista, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsAdminProyecto])
+    def agregar_usuario_equipo(self, request, pk=None):
+        """
+        Agrega un usuario al equipo del proyecto con un rol específico.
+        
+        Body:
+            {
+                "usuario_id": 1,
+                "rol_id": 2
+            }
+        """
+        from rest_framework.response import Response
+        from rest_framework import status
+        
+        proyecto = self.get_object()
+        
+        # Valida permisos de organización
+        if not request.user.is_superuser:
+            if proyecto.id_organizacion != request.user.id_organizacion:
+                return Response(
+                    {'error': 'No tiene permiso para acceder a este proyecto.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        serializer = AgregarUsuarioEquipoSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        usuario_id = serializer.validated_data['usuario_id']
+        rol_id = serializer.validated_data['rol_id']
+        
+        # Obtener usuario y rol
+        from .models import Usuario, Rol
+        usuario = Usuario.objects.get(id=usuario_id)
+        rol = Rol.objects.get(id=rol_id)
+        
+        # Verificar que el usuario pertenezca a la misma organización
+        if not request.user.is_superuser:
+            if usuario.id_organizacion != proyecto.id_organizacion:
+                return Response(
+                    {'error': 'El usuario debe pertenecer a la misma organización que el proyecto.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Crear o verificar la asignación
+        asignacion, created = Usuario_Rol_Proyecto.objects.get_or_create(
+            usuario=usuario,
+            rol=rol,
+            proyecto=proyecto,
+            defaults={}
+        )
+        
+        if not created:
+            return Response(
+                {'mensaje': 'El usuario ya tiene este rol en el proyecto.'},
+                status=status.HTTP_200_OK
+            )
+        
+        # Serializar la respuesta
+        equipo_serializer = EquipoProyectoSerializer(asignacion)
+        return Response(
+            {
+                'mensaje': 'Usuario agregado al equipo exitosamente.',
+                'equipo': equipo_serializer.data
+            },
+            status=status.HTTP_201_CREATED
+        )
+    
+    @action(detail=True, methods=['delete'], url_path='equipo/(?P<usuario_id>[^/.]+)', permission_classes=[IsAuthenticated, IsAdminProyecto])
+    def quitar_usuario_equipo(self, request, pk=None, usuario_id=None):
+        """
+        Quita un usuario del equipo del proyecto (elimina todas sus asignaciones de roles).
+        
+        URL: /api/proyectos/{id}/equipo/{usuario_id}/
+        """
+        from rest_framework.response import Response
+        from rest_framework import status
+        
+        proyecto = self.get_object()
+        
+        # Valida permisos de organización
+        if not request.user.is_superuser:
+            if proyecto.id_organizacion != request.user.id_organizacion:
+                return Response(
+                    {'error': 'No tiene permiso para acceder a este proyecto.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        try:
+            usuario = Usuario.objects.get(id=usuario_id)
+        except Usuario.DoesNotExist:
+            return Response(
+                {'error': 'El usuario no existe.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Verificar que el usuario pertenezca a la misma organización
+        if not request.user.is_superuser:
+            if usuario.id_organizacion != proyecto.id_organizacion:
+                return Response(
+                    {'error': 'El usuario no pertenece a la organización del proyecto.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Verificar que no sea el último Admin Proyecto
+        from .models import ROL_ADMIN_PRYECTO
+        admins_proyecto = Usuario_Rol_Proyecto.objects.filter(
+            proyecto=proyecto,
+            rol__nombre_rol=ROL_ADMIN_PRYECTO
+        ).exclude(usuario=usuario)
+        
+        if Usuario_Rol_Proyecto.objects.filter(
+            proyecto=proyecto,
+            usuario=usuario,
+            rol__nombre_rol=ROL_ADMIN_PRYECTO
+        ).exists() and admins_proyecto.count() == 0:
+            return Response(
+                {'error': 'No se puede quitar al último Admin Proyecto del proyecto.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Eliminar todas las asignaciones del usuario en este proyecto
+        eliminadas = Usuario_Rol_Proyecto.objects.filter(
+            proyecto=proyecto,
+            usuario=usuario
+        ).delete()
+        
+        return Response(
+            {
+                'mensaje': f'Usuario removido del equipo exitosamente. Se eliminaron {eliminadas[0]} asignación(es).'
+            },
+            status=status.HTTP_200_OK
+        )
+    
+    @action(detail=True, methods=['patch'], url_path='equipo/(?P<usuario_id>[^/.]+)/cambiar_rol', permission_classes=[IsAuthenticated, IsAdminProyecto])
+    def cambiar_rol_equipo(self, request, pk=None, usuario_id=None):
+        """
+        Cambia el rol de un usuario en el proyecto.
+        
+        Nota: Esto elimina todos los roles actuales y asigna el nuevo rol.
+        Si se desea agregar un rol adicional, usar agregar_usuario_equipo.
+        
+        URL: /api/proyectos/{id}/equipo/{usuario_id}/cambiar_rol/
+        Body:
+            {
+                "rol_id": 2
+            }
+        """
+        from rest_framework.response import Response
+        from rest_framework import status
+        
+        proyecto = self.get_object()
+        
+        # Valida permisos de organización
+        if not request.user.is_superuser:
+            if proyecto.id_organizacion != request.user.id_organizacion:
+                return Response(
+                    {'error': 'No tiene permiso para acceder a este proyecto.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        serializer = CambiarRolEquipoSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            usuario = Usuario.objects.get(id=usuario_id)
+        except Usuario.DoesNotExist:
+            return Response(
+                {'error': 'El usuario no existe.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        rol_id = serializer.validated_data['rol_id']
+        from .models import Rol
+        nuevo_rol = Rol.objects.get(id=rol_id)
+        
+        # Verificar que el usuario pertenezca a la misma organización
+        if not request.user.is_superuser:
+            if usuario.id_organizacion != proyecto.id_organizacion:
+                return Response(
+                    {'error': 'El usuario no pertenece a la organización del proyecto.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Si el usuario es el último Admin Proyecto y se intenta cambiar su rol, verificar
+        from .models import ROL_ADMIN_PRYECTO
+        if Usuario_Rol_Proyecto.objects.filter(
+            proyecto=proyecto,
+            usuario=usuario,
+            rol__nombre_rol=ROL_ADMIN_PRYECTO
+        ).exists():
+            otros_admins = Usuario_Rol_Proyecto.objects.filter(
+                proyecto=proyecto,
+                rol__nombre_rol=ROL_ADMIN_PRYECTO
+            ).exclude(usuario=usuario)
+            
+            if otros_admins.count() == 0 and nuevo_rol.nombre_rol != ROL_ADMIN_PRYECTO:
+                return Response(
+                    {'error': 'No se puede cambiar el rol del último Admin Proyecto.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Eliminar todos los roles actuales del usuario en este proyecto
+        Usuario_Rol_Proyecto.objects.filter(
+            proyecto=proyecto,
+            usuario=usuario
+        ).delete()
+        
+        # Crear la nueva asignación
+        nueva_asignacion = Usuario_Rol_Proyecto.objects.create(
+            usuario=usuario,
+            rol=nuevo_rol,
+            proyecto=proyecto
+        )
+        
+        # Serializar la respuesta
+        equipo_serializer = EquipoProyectoSerializer(nueva_asignacion)
+        return Response(
+            {
+                'mensaje': 'Rol del usuario actualizado exitosamente.',
+                'equipo': equipo_serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
 
 
 class UsuarioViewSet(viewsets.ModelViewSet):
@@ -153,6 +524,193 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         if self.request.user.id_organizacion:
             return Usuario.objects.filter(id_organizacion=self.request.user.id_organizacion)
         return Usuario.objects.filter(id=self.request.user.id)
+    
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def aceptar_invitacion(self, request):
+        """
+        Acepta una invitación y crea el usuario.
+        
+        Body:
+            {
+                "token": "token_de_invitacion",
+                "username": "nombre_usuario",
+                "password": "contraseña",
+                "password_confirm": "confirmar_contraseña",
+                "first_name": "Nombre",
+                "last_name": "Apellido"
+            }
+        """
+        from rest_framework.response import Response
+        from rest_framework import status
+        from django.utils import timezone
+        
+        serializer = AceptarInvitacionSerializer(data=request.data, context={'request': request})
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        token = serializer.validated_data['token']
+        
+        try:
+            invitacion = InvitacionUsuario.objects.get(token=token)
+        except InvitacionUsuario.DoesNotExist:
+            return Response(
+                {'error': 'Token de invitación inválido.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Verificar que la invitación pueda ser aceptada
+        if not invitacion.puede_ser_aceptada():
+            if invitacion.esta_expirada():
+                return Response(
+                    {'error': 'La invitación ha expirado.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            return Response(
+                {'error': 'Esta invitación ya fue procesada.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Crear el usuario
+        try:
+            usuario = Usuario.objects.create_user(
+                username=serializer.validated_data['username'],
+                email=invitacion.email,
+                password=serializer.validated_data['password'],
+                first_name=serializer.validated_data.get('first_name') or invitacion.nombre_sugerido or '',
+                last_name=serializer.validated_data.get('last_name') or invitacion.apellido_sugerido or '',
+                id_organizacion=invitacion.organizacion
+            )
+            
+            # Marcar invitación como aceptada
+            invitacion.estado = InvitacionUsuario.ESTADO_ACEPTADA
+            invitacion.fecha_aceptacion = timezone.now()
+            invitacion.save()
+            
+            return Response(
+                {
+                    'mensaje': 'Invitación aceptada exitosamente. Ya puedes iniciar sesión.',
+                    'usuario_id': usuario.id,
+                    'username': usuario.username
+                },
+                status=status.HTTP_201_CREATED
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Error al crear el usuario: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class InvitacionUsuarioViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para gestionar invitaciones de usuarios.
+    
+    Los usuarios pueden ver las invitaciones de su organización y crear nuevas.
+    Solo el usuario que creó la invitación o un admin puede cancelarla.
+    """
+    queryset = InvitacionUsuario.objects.all()
+    serializer_class = InvitacionUsuarioSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """Filtra las invitaciones según la organización del usuario."""
+        if self.request.user.is_superuser:
+            return InvitacionUsuario.objects.all()
+        if self.request.user.id_organizacion:
+            return InvitacionUsuario.objects.filter(
+                organizacion=self.request.user.id_organizacion
+            )
+        return InvitacionUsuario.objects.none()
+    
+    def get_serializer_context(self):
+        """Agrega el request al contexto del serializer."""
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+    
+    def perform_create(self, serializer):
+        """Crea la invitación y marca invitaciones expiradas."""
+        # Marcar invitaciones expiradas antes de crear una nueva
+        from django.utils import timezone
+        InvitacionUsuario.objects.filter(
+            organizacion=self.request.user.id_organizacion,
+            estado=InvitacionUsuario.ESTADO_PENDIENTE,
+            fecha_expiracion__lt=timezone.now()
+        ).update(estado=InvitacionUsuario.ESTADO_EXPIRADA)
+        
+        serializer.save()
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def reenviar(self, request, pk=None):
+        """
+        Reenvía una invitación generando un nuevo token y fecha de expiración.
+        
+        Solo puede ser reenviada si está pendiente o expirada.
+        """
+        from rest_framework.response import Response
+        from rest_framework import status
+        from django.utils import timezone
+        from datetime import timedelta
+        import secrets
+        
+        invitacion = self.get_object()
+        
+        # Verificar permisos
+        if not request.user.is_superuser:
+            if invitacion.organizacion != request.user.id_organizacion:
+                return Response(
+                    {'error': 'No tiene permiso para reenviar esta invitación.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Solo se pueden reenviar invitaciones pendientes o expiradas
+        if invitacion.estado not in [InvitacionUsuario.ESTADO_PENDIENTE, InvitacionUsuario.ESTADO_EXPIRADA]:
+            return Response(
+                {'error': 'Solo se pueden reenviar invitaciones pendientes o expiradas.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Generar nuevo token y fecha de expiración
+        invitacion.token = secrets.token_urlsafe(32)
+        invitacion.fecha_expiracion = timezone.now() + timedelta(days=7)
+        invitacion.estado = InvitacionUsuario.ESTADO_PENDIENTE
+        invitacion.save()
+        
+        serializer = self.get_serializer(invitacion)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def cancelar(self, request, pk=None):
+        """
+        Cancela una invitación pendiente.
+        
+        Solo puede ser cancelada por quien la creó o un admin de la organización.
+        """
+        from rest_framework.response import Response
+        from rest_framework import status
+        
+        invitacion = self.get_object()
+        
+        # Verificar permisos
+        if not request.user.is_superuser:
+            if invitacion.organizacion != request.user.id_organizacion:
+                return Response(
+                    {'error': 'No tiene permiso para cancelar esta invitación.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        if invitacion.estado != InvitacionUsuario.ESTADO_PENDIENTE:
+            return Response(
+                {'error': 'Solo se pueden cancelar invitaciones pendientes.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        invitacion.estado = InvitacionUsuario.ESTADO_CANCELADA
+        invitacion.save()
+        
+        serializer = self.get_serializer(invitacion)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class RolViewSet(viewsets.ModelViewSet):
@@ -574,18 +1132,89 @@ class LogTransaccionViewSet(viewsets.ReadOnlyModelViewSet):
     ViewSet para consultar los logs de transacciones (auditoría).
     
     Los logs son solo de lectura, y se crean automáticamente por el sistema.
+    Proporciona trazabilidad completa de todas las acciones sobre transacciones (C005).
     """
     queryset = Log_transaccion.objects.all()
     serializer_class = LogTransaccionSerializer
     permission_classes = [IsAuthenticated]
+    filterset_fields = ['transaccion', 'usuario', 'accion_realizada']
+    ordering_fields = ['fecha_hora_accion']
+    ordering = ['-fecha_hora_accion']  # Más recientes primero
     
     def get_queryset(self):
-        """Filtra los logs según la organización del usuario."""
-        if self.request.user.is_superuser:
-            return Log_transaccion.objects.all()
-        return Log_transaccion.objects.filter(
-            transaccion__proyecto__id_organizacion=self.request.user.id_organizacion
+        """
+        Filtra los logs según la organización del usuario.
+        
+        Permite filtrar por:
+        - transaccion: ID de transacción
+        - usuario: ID de usuario
+        - accion_realizada: Tipo de acción (creacion, modificacion, aprobacion, etc.)
+        - proyecto: ID de proyecto (filtro personalizado)
+        """
+        queryset = Log_transaccion.objects.select_related(
+            'transaccion', 'usuario', 'transaccion__proyecto'
         )
+        
+        if self.request.user.is_superuser:
+            queryset = queryset.all()
+        else:
+            queryset = queryset.filter(
+                transaccion__proyecto__id_organizacion=self.request.user.id_organizacion
+            )
+        
+        # Filtro adicional por proyecto si se especifica
+        proyecto_id = self.request.query_params.get('proyecto', None)
+        if proyecto_id:
+            queryset = queryset.filter(transaccion__proyecto_id=proyecto_id)
+        
+        return queryset
+    
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def por_transaccion(self, request):
+        """
+        Obtiene todos los logs de una transacción específica.
+        
+        Query params:
+            transaccion_id: ID de la transacción
+            
+        Returns:
+            Lista de logs ordenados por fecha (más recientes primero)
+        """
+        from rest_framework.response import Response
+        from rest_framework import status
+        
+        transaccion_id = request.query_params.get('transaccion_id', None)
+        
+        if not transaccion_id:
+            return Response(
+                {'error': 'El parámetro "transaccion_id" es requerido.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Verificar que la transacción pertenezca a la organización del usuario
+            from .models import Transaccion
+            transaccion = Transaccion.objects.get(id=transaccion_id)
+            
+            if not request.user.is_superuser:
+                if transaccion.proyecto.id_organizacion != request.user.id_organizacion:
+                    return Response(
+                        {'error': 'No tiene permiso para acceder a esta transacción.'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            
+            logs = Log_transaccion.objects.filter(
+                transaccion_id=transaccion_id
+            ).select_related('usuario').order_by('-fecha_hora_accion')
+            
+            serializer = self.get_serializer(logs, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            
+        except Transaccion.DoesNotExist:
+            return Response(
+                {'error': 'La transacción no existe.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
 
 class ItemPresupuestarioViewSet(viewsets.ModelViewSet):

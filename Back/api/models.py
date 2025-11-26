@@ -1,5 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
+from django.core.exceptions import ValidationError
+import secrets
 
 
 ### --------- Modelos Gestión Usuarios y configuración principal  --------- ###
@@ -119,6 +122,88 @@ class Usuario_Rol_Proyecto(models.Model):
 
     def __str__(self):
         return f"{self.usuario.username} - {self.proyecto.nombre_proyecto} - {self.rol.nombre_rol}"
+
+
+## --- Modelo para gestión de Invitaciones de Usuarios ---
+
+class InvitacionUsuario(models.Model):
+    """
+    Modelo para gestionar invitaciones de usuarios a organizaciones.
+    
+    Permite invitar usuarios por email y que acepten la invitación
+    mediante un token único.
+    """
+    
+    ESTADO_PENDIENTE = 'pendiente'
+    ESTADO_ACEPTADA = 'aceptada'
+    ESTADO_EXPIRADA = 'expirada'
+    ESTADO_CANCELADA = 'cancelada'
+    
+    ESTADO_CHOICES = [
+        (ESTADO_PENDIENTE, 'Pendiente'),
+        (ESTADO_ACEPTADA, 'Aceptada'),
+        (ESTADO_EXPIRADA, 'Expirada'),
+        (ESTADO_CANCELADA, 'Cancelada'),
+    ]
+    
+    email = models.EmailField(verbose_name='Email del invitado')
+    token = models.CharField(max_length=64, unique=True, db_index=True)
+    organizacion = models.ForeignKey(Organizacion, on_delete=models.CASCADE, verbose_name='Organización')
+    invitado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.CASCADE,
+        related_name='invitaciones_enviadas',
+        verbose_name='Invitado por'
+    )
+    estado = models.CharField(
+        max_length=20,
+        choices=ESTADO_CHOICES,
+        default=ESTADO_PENDIENTE,
+        verbose_name='Estado'
+    )
+    fecha_invitacion = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de invitación')
+    fecha_expiracion = models.DateTimeField(verbose_name='Fecha de expiración')
+    fecha_aceptacion = models.DateTimeField(null=True, blank=True, verbose_name='Fecha de aceptación')
+    
+    # Datos opcionales del usuario a crear
+    nombre_sugerido = models.CharField(max_length=150, blank=True, verbose_name='Nombre sugerido')
+    apellido_sugerido = models.CharField(max_length=150, blank=True, verbose_name='Apellido sugerido')
+    username_sugerido = models.CharField(max_length=150, blank=True, verbose_name='Username sugerido')
+    
+    class Meta:
+        verbose_name = 'Invitación de Usuario'
+        verbose_name_plural = 'Invitaciones de Usuarios'
+        ordering = ['-fecha_invitacion']
+        indexes = [
+            models.Index(fields=['token']),
+            models.Index(fields=['email', 'estado']),
+        ]
+    
+    def __str__(self):
+        return f"Invitación para {self.email} - {self.organizacion.nombre_organizacion}"
+    
+    def save(self, *args, **kwargs):
+        """Genera un token único si no existe."""
+        if not self.token:
+            self.token = secrets.token_urlsafe(32)
+        super().save(*args, **kwargs)
+    
+    def esta_expirada(self):
+        """Verifica si la invitación ha expirado."""
+        return timezone.now() > self.fecha_expiracion
+    
+    def puede_ser_aceptada(self):
+        """Verifica si la invitación puede ser aceptada."""
+        return (
+            self.estado == self.ESTADO_PENDIENTE and
+            not self.esta_expirada()
+        )
+    
+    def marcar_como_expirada(self):
+        """Marca la invitación como expirada si corresponde."""
+        if self.esta_expirada() and self.estado == self.ESTADO_PENDIENTE:
+            self.estado = self.ESTADO_EXPIRADA
+            self.save(update_fields=['estado'])
 
 
 ## --- Modelos para gestión de Proveedores y Transacciones ---

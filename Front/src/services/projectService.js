@@ -118,4 +118,58 @@ export const cerrarRendicion = async (projectId) => {
   return response.data;
 };
 
+/**
+ * Obtiene el equipo de un proyecto (usuarios con sus roles).
+ * 
+ * @param {number} projectId - ID del proyecto
+ * @returns {Promise<Array>} Devuelve una lista de usuarios con sus roles
+ */
+export const getEquipoProyecto = async (projectId) => {
+  const response = await api.get(`/proyectos/${projectId}/equipo/`);
+  return response.data;
+};
+
+/**
+ * Agrega un usuario al equipo del proyecto con un rol específico.
+ * 
+ * @param {number} projectId - ID del proyecto
+ * @param {number} usuarioId - ID del usuario
+ * @param {number} rolId - ID del rol
+ * @returns {Promise<Object>} Devuelve la confirmación y datos del equipo
+ */
+export const agregarUsuarioEquipo = async (projectId, usuarioId, rolId) => {
+  const response = await api.post(`/proyectos/${projectId}/agregar_usuario_equipo/`, {
+    usuario_id: usuarioId,
+    rol_id: rolId
+  });
+  return response.data;
+};
+
+/**
+ * Quita un usuario del equipo del proyecto.
+ * 
+ * @param {number} projectId - ID del proyecto
+ * @param {number} usuarioId - ID del usuario
+ * @returns {Promise<Object>} Devuelve la confirmación
+ */
+export const quitarUsuarioEquipo = async (projectId, usuarioId) => {
+  const response = await api.delete(`/proyectos/${projectId}/equipo/${usuarioId}/`);
+  return response.data;
+};
+
+/**
+ * Cambia el rol de un usuario en el proyecto.
+ * 
+ * @param {number} projectId - ID del proyecto
+ * @param {number} usuarioId - ID del usuario
+ * @param {number} rolId - ID del nuevo rol
+ * @returns {Promise<Object>} Devuelve la confirmación y datos del equipo
+ */
+export const cambiarRolEquipo = async (projectId, usuarioId, rolId) => {
+  const response = await api.patch(`/proyectos/${projectId}/equipo/${usuarioId}/cambiar_rol/`, {
+    rol_id: rolId
+  });
+  return response.data;
+};
+
 

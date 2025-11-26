@@ -13,6 +13,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getProject, getProjectMetrics } from '../services/projectService';
 import { getTransactions, approveTransaction, rejectTransaction } from '../services/transactionService';
 import { getProjectEvidence, getTransactionEvidence } from '../services/evidenceService';
+import { getLogsPorProyecto } from '../services/logService';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -30,6 +31,9 @@ const ProjectDetails = () => {
   const [loading, setLoading] = useState(true);
   const [transaccionesConEvidencias, setTransaccionesConEvidencias] = useState({});
   const [mostrarEvidencias, setMostrarEvidencias] = useState({});
+  const [logs, setLogs] = useState([]);
+  const [mostrarHistorial, setMostrarHistorial] = useState(false);
+  const [cargandoLogs, setCargandoLogs] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -128,6 +132,58 @@ const ProjectDetails = () => {
   };
 
   /**
+   * Carga el historial de logs del proyecto.
+   */
+  const cargarHistorial = async () => {
+    if (mostrarHistorial && logs.length > 0) {
+      // Si ya está cargado y visible, solo ocultar
+      setMostrarHistorial(false);
+      return;
+    }
+
+    try {
+      setCargandoLogs(true);
+      const logsData = await getLogsPorProyecto(id);
+      setLogs(Array.isArray(logsData) ? logsData : []);
+      setMostrarHistorial(true);
+    } catch (error) {
+      console.error('Error al cargar historial:', error);
+      toast.error('Error al cargar el historial de acciones');
+    } finally {
+      setCargandoLogs(false);
+    }
+  };
+
+  /**
+   * Formatea la fecha para mostrar.
+   */
+  const formatearFecha = (fechaISO) => {
+    if (!fechaISO) return 'N/A';
+    const fecha = new Date(fechaISO);
+    return fecha.toLocaleString('es-CL', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  /**
+   * Obtiene el badge de color para una acción.
+   */
+  const getAccionBadgeClass = (accion) => {
+    const clases = {
+      'creacion': 'bg-success',
+      'modificacion': 'bg-info',
+      'aprobacion': 'bg-primary',
+      'rechazo': 'bg-danger',
+      'eliminacion': 'bg-dark',
+    };
+    return clases[accion] || 'bg-secondary';
+  };
+
+  /**
    * Formatea el tamaño del archivo en formato legible.
    */
   const formatearTamanio = (bytes) => {
@@ -170,6 +226,13 @@ const ProjectDetails = () => {
         <div className="btn-group">
           <button className="btn btn-secondary" onClick={() => navigate('/')}>
             Volver al Dashboard
+          </button>
+          {/* Botón para gestionar equipo */}
+          <button
+            className="btn btn-outline-primary"
+            onClick={() => navigate(`/proyecto/${id}/equipo`)}
+          >
+            Gestionar Equipo
           </button>
           {/* Botón para pre-rendición (solo si el proyecto no está cerrado) */}
           {proyecto.estado_proyecto !== 'completado' && proyecto.estado_proyecto !== 'cerrado' && (
@@ -388,6 +451,89 @@ const ProjectDetails = () => {
               </table>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Sección de Historial de Acciones */}
+      <div className="row mt-4">
+        <div className="col-12">
+          <div className="card shadow">
+            <div className="card-header d-flex justify-content-between align-items-center">
+              <h5 className="mb-0">Historial de Acciones (Auditoría)</h5>
+              <button
+                className="btn btn-sm btn-outline-primary"
+                onClick={cargarHistorial}
+                disabled={cargandoLogs}
+              >
+                {cargandoLogs ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                    Cargando...
+                  </>
+                ) : mostrarHistorial ? (
+                  'Ocultar Historial'
+                ) : (
+                  'Ver Historial'
+                )}
+              </button>
+            </div>
+            {mostrarHistorial && (
+              <div className="card-body">
+                {logs.length === 0 ? (
+                  <p className="text-muted text-center mb-0">No hay registros de acciones para este proyecto.</p>
+                ) : (
+                  <div className="table-responsive">
+                    <table className="table table-sm table-hover">
+                      <thead>
+                        <tr>
+                          <th>Fecha y Hora</th>
+                          <th>Usuario</th>
+                          <th>Acción</th>
+                          <th>Transacción</th>
+                          <th>Monto</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {logs.map((log) => (
+                          <tr key={log.id}>
+                            <td>
+                              <small>{formatearFecha(log.fecha_hora_accion)}</small>
+                            </td>
+                            <td>
+                              {log.usuario_nombre_completo || log.usuario_nombre}
+                              <br />
+                              <small className="text-muted">@{log.usuario_nombre}</small>
+                            </td>
+                            <td>
+                              <span className={`badge ${getAccionBadgeClass(log.accion_realizada)} text-white`}>
+                                {log.accion_display || log.accion_realizada}
+                              </span>
+                            </td>
+                            <td>
+                              <small>
+                                Doc: {log.transaccion_nro_documento || 'N/A'}
+                                <br />
+                                {log.proyecto_nombre && (
+                                  <span className="text-muted">{log.proyecto_nombre}</span>
+                                )}
+                              </small>
+                            </td>
+                            <td>
+                              {log.transaccion_monto ? (
+                                <strong>${parseFloat(log.transaccion_monto).toLocaleString('es-CL')}</strong>
+                              ) : (
+                                <span className="text-muted">N/A</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
