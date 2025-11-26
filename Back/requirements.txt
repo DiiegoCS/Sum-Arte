@@ -10,3 +10,6 @@ django-ckeditor==6.7.3
 psycopg2==2.9.11
 reportlab==4.2.2
 openpyxl==3.1.5
+supabase==2.4.0
+httpx==0.25.2
+gotrue==2.8.1

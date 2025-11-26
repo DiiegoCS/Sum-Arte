@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -7,6 +6,8 @@ import './App.css';
 import Dashboard from './pages/Dashboard';
 import ProjectDetails from './pages/ProjectDetails';
 import RegisterExpense from './pages/RegisterExpense';
+import PreRendicion from './pages/PreRendicion';
+import CerrarRendicion from './pages/CerrarRendicion';
 import Login from './pages/Login';
 
 function App() {
@@ -48,6 +49,28 @@ function App() {
                   <>
                     <Navbar />
                     <RegisterExpense />
+                  </>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/proyecto/:id/pre-rendicion"
+              element={
+                <ProtectedRoute>
+                  <>
+                    <Navbar />
+                    <PreRendicion />
+                  </>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/proyecto/:id/cerrar-rendicion"
+              element={
+                <ProtectedRoute>
+                  <>
+                    <Navbar />
+                    <CerrarRendicion />
                   </>
                 </ProtectedRoute>
               }

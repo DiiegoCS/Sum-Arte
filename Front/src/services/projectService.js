@@ -96,4 +96,26 @@ export const getProjectMetrics = async (projectId) => {
   return response.data;
 };
 
+/**
+ * Valida la integridad del proyecto antes de cerrar la rendición (pre-rendición).
+ * 
+ * @param {number} projectId - ID del proyecto
+ * @returns {Promise<Object>} Devuelve el resultado de la validación con errores y advertencias
+ */
+export const getPreRendicion = async (projectId) => {
+  const response = await api.get(`/proyectos/${projectId}/pre_rendicion/`);
+  return response.data;
+};
+
+/**
+ * Cierra la rendición del proyecto, bloqueando ediciones futuras.
+ * 
+ * @param {number} projectId - ID del proyecto
+ * @returns {Promise<Object>} Devuelve el proyecto con rendición cerrada
+ */
+export const cerrarRendicion = async (projectId) => {
+  const response = await api.post(`/proyectos/${projectId}/cerrar_rendicion/`);
+  return response.data;
+};
+
 

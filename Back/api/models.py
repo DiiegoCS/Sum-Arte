@@ -288,9 +288,30 @@ class Evidencia(models.Model):
     Modelo para almacenar evidencias documentales (facturas, boletas, fotos, etc.).
     
     Soporta versionado y eliminación lógica para auditoría.
+    Los archivos se almacenan en Supabase Storage.
     """
     proyecto = models.ForeignKey(Proyecto, on_delete=models.CASCADE, db_index=True)
-    archivo_evidencia = models.FileField(upload_to='evidencias/')
+    # Campo para almacenar la ruta en Supabase Storage
+    # Temporalmente nullable para permitir migración de datos existentes
+    archivo_path = models.CharField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text="Ruta del archivo en Supabase Storage"
+    )
+    archivo_url = models.URLField(
+        max_length=1000,
+        null=True,
+        blank=True,
+        help_text="URL pública del archivo en Supabase Storage"
+    )
+    # Mantener el campo antiguo temporalmente para migración
+    archivo_evidencia = models.FileField(
+        upload_to='evidencias/',
+        null=True,
+        blank=True,
+        help_text="Campo legacy - será eliminado después de migración"
+    )
     tipo_archivo = models.CharField(max_length=50, help_text="Tipo MIME del archivo")
     fecha_carga = models.DateTimeField(auto_now_add=True, db_index=True)
     nombre_evidencia = models.CharField(max_length=255)
@@ -350,8 +371,16 @@ class Evidencia(models.Model):
         self.save()
 
 class Transaccion_Evidencia(models.Model):
+    """Modelo para vincular evidencias a transacciones."""
     transaccion = models.ForeignKey(Transaccion, on_delete=models.CASCADE)
     evidencia = models.ForeignKey(Evidencia, on_delete=models.CASCADE)
+    
+    class Meta:
+        unique_together = ('transaccion', 'evidencia')
+        ordering = ['-id']
+    
+    def __str__(self):
+        return f"Transacción {self.transaccion.id} - Evidencia {self.evidencia.id}"
 
 ACCION_LOG_CREACION = 'creacion'
 ACCION_LOG_MODIFICACION = 'modificacion'
