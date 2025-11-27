@@ -121,21 +121,59 @@ class ProyectoSerializer(serializers.ModelSerializer):
     monto_disponible = serializers.SerializerMethodField()
     porcentaje_ejecutado = serializers.SerializerMethodField()
     organizacion_nombre = serializers.CharField(source='id_organizacion.nombre_organizacion', read_only=True)
+    estado_display = serializers.CharField(source='get_estado_proyecto_display', read_only=True)
     
     class Meta:
         model = Proyecto
         fields = '__all__'
         read_only_fields = ['monto_ejecutado_proyecto']
+        extra_kwargs = {
+            'id_organizacion': {'required': False}
+        }
+    
+    def validate_nombre_proyecto(self, value):
+        """Valida que el nombre del proyecto no esté vacío."""
+        if not value or len(value.strip()) < 3:
+            raise serializers.ValidationError("El nombre del proyecto debe tener al menos 3 caracteres.")
+        return value.strip()
+    
+    def validate_presupuesto_total(self, value):
+        """Valida que el presupuesto sea positivo."""
+        if value <= 0:
+            raise serializers.ValidationError("El presupuesto total debe ser mayor a cero.")
+        return value
+    
+    def validate(self, data):
+        """Valida las fechas del proyecto."""
+        fecha_inicio = data.get('fecha_inicio_proyecto')
+        fecha_fin = data.get('fecha_fin_proyecto')
+        
+        # Si estamos actualizando, usar las fechas existentes si no se proporcionan
+        if self.instance:
+            fecha_inicio = fecha_inicio or self.instance.fecha_inicio_proyecto
+            fecha_fin = fecha_fin or self.instance.fecha_fin_proyecto
+        
+        if fecha_inicio and fecha_fin:
+            if fecha_fin < fecha_inicio:
+                raise serializers.ValidationError({
+                    'fecha_fin_proyecto': 'La fecha de fin debe ser posterior a la fecha de inicio.'
+                })
+        
+        return data
     
     def get_monto_disponible(self, obj):
         """Calcula el monto disponible del proyecto."""
-        return float(obj.presupuesto_total - obj.monto_ejecutado_proyecto)
+        presupuesto = float(obj.presupuesto_total)
+        ejecutado = float(obj.monto_ejecutado_proyecto)
+        return presupuesto - ejecutado
     
     def get_porcentaje_ejecutado(self, obj):
         """Calcula el porcentaje ejecutado del proyecto."""
-        if obj.presupuesto_total == 0:
+        presupuesto = float(obj.presupuesto_total)
+        if presupuesto == 0:
             return 0.0
-        return float((obj.monto_ejecutado_proyecto / obj.presupuesto_total) * 100)
+        ejecutado = float(obj.monto_ejecutado_proyecto)
+        return (ejecutado / presupuesto) * 100
 
 class EvidenciaSerializer(serializers.ModelSerializer):
     """Serializador para evidencias, mostrando información del usuario cargador."""
@@ -548,6 +586,92 @@ class UsuarioSerializer(serializers.ModelSerializer):
         instance = self.Meta.model(**validated_data)
         if password is not None:
             instance.set_password(password)
+        instance.save()
+        return instance
+
+
+class PerfilUsuarioSerializer(serializers.ModelSerializer):
+    """
+    Serializador para actualizar el perfil personal del usuario.
+    
+    Solo permite editar campos personales que no afectan el sistema:
+    - first_name, last_name, email
+    - password (opcional, con confirmación)
+    
+    No permite editar: username, id_organizacion, is_superuser, is_active
+    """
+    
+    password_confirm = serializers.CharField(
+        write_only=True,
+        required=False,
+        help_text="Confirma la nueva contraseña"
+    )
+    
+    class Meta:
+        model = Usuario
+        fields = ['first_name', 'last_name', 'email', 'password', 'password_confirm']
+        extra_kwargs = {
+            'password': {'write_only': True, 'required': False},
+            'first_name': {'required': False},
+            'last_name': {'required': False},
+            'email': {'required': False}
+        }
+    
+    def validate_email(self, value):
+        """Valida que el email sea único si se proporciona."""
+        if value:
+            # Normalizar email
+            from django.contrib.auth.models import AbstractUser
+            value = AbstractUser.objects.normalize_email(value)
+            
+            # Verificar que no esté en uso por otro usuario
+            user = self.instance
+            if Usuario.objects.filter(email=value).exclude(pk=user.pk).exists():
+                raise serializers.ValidationError("Este email ya está en uso por otro usuario.")
+        return value
+    
+    def validate(self, data):
+        """Valida que las contraseñas coincidan si se proporcionan."""
+        password = data.get('password')
+        password_confirm = data.get('password_confirm')
+        
+        if password and not password_confirm:
+            raise serializers.ValidationError({
+                'password_confirm': 'Debe confirmar la nueva contraseña.'
+            })
+        
+        if password_confirm and not password:
+            raise serializers.ValidationError({
+                'password': 'Debe proporcionar una nueva contraseña.'
+            })
+        
+        if password and password_confirm:
+            if password != password_confirm:
+                raise serializers.ValidationError({
+                    'password_confirm': 'Las contraseñas no coinciden.'
+                })
+            
+            # Validar longitud mínima de contraseña
+            if len(password) < 8:
+                raise serializers.ValidationError({
+                    'password': 'La contraseña debe tener al menos 8 caracteres.'
+                })
+        
+        return data
+    
+    def update(self, instance, validated_data):
+        """Actualiza el perfil del usuario."""
+        password = validated_data.pop('password', None)
+        validated_data.pop('password_confirm', None)  # No se guarda
+        
+        # Actualizar campos
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        # Actualizar contraseña si se proporciona
+        if password:
+            instance.set_password(password)
+        
         instance.save()
         return instance
     

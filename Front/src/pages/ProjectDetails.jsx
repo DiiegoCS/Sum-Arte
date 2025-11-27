@@ -13,7 +13,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getProject, getProjectMetrics } from '../services/projectService';
 import { getTransactions, approveTransaction, rejectTransaction } from '../services/transactionService';
 import { getProjectEvidence, getTransactionEvidence } from '../services/evidenceService';
-import { getLogsPorProyecto } from '../services/logService';
+import { getLogsPorProyecto, getLogs } from '../services/logService';
+import { getUsuarios } from '../services/userService';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -32,8 +33,15 @@ const ProjectDetails = () => {
   const [transaccionesConEvidencias, setTransaccionesConEvidencias] = useState({});
   const [mostrarEvidencias, setMostrarEvidencias] = useState({});
   const [logs, setLogs] = useState([]);
+  const [logsOriginales, setLogsOriginales] = useState([]); // Logs sin filtrar
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [cargandoLogs, setCargandoLogs] = useState(false);
+  const [usuarios, setUsuarios] = useState([]);
+  const [filtrosHistorial, setFiltrosHistorial] = useState({
+    usuario: '',
+    accion_realizada: '',
+    ordenFecha: 'desc', // 'asc' o 'desc'
+  });
 
   useEffect(() => {
     cargarDatos();
@@ -135,7 +143,7 @@ const ProjectDetails = () => {
    * Carga el historial de logs del proyecto.
    */
   const cargarHistorial = async () => {
-    if (mostrarHistorial && logs.length > 0) {
+    if (mostrarHistorial && logsOriginales.length > 0) {
       // Si ya está cargado y visible, solo ocultar
       setMostrarHistorial(false);
       return;
@@ -143,8 +151,22 @@ const ProjectDetails = () => {
 
     try {
       setCargandoLogs(true);
-      const logsData = await getLogsPorProyecto(id);
-      setLogs(Array.isArray(logsData) ? logsData : []);
+      
+      // Cargar logs y usuarios en paralelo
+      const [logsData, usuariosData] = await Promise.all([
+        getLogsPorProyecto(id),
+        getUsuarios()
+      ]);
+      
+      const logsList = Array.isArray(logsData) ? logsData : [];
+      setLogsOriginales(logsList);
+      
+      // Aplicar filtros iniciales
+      aplicarFiltros(logsList, filtrosHistorial);
+      
+      // Guardar usuarios para el filtro
+      setUsuarios(Array.isArray(usuariosData) ? usuariosData : []);
+      
       setMostrarHistorial(true);
     } catch (error) {
       console.error('Error al cargar historial:', error);
@@ -152,6 +174,66 @@ const ProjectDetails = () => {
     } finally {
       setCargandoLogs(false);
     }
+  };
+
+  /**
+   * Aplica los filtros a los logs y actualiza el estado.
+   */
+  const aplicarFiltros = (logsAFiltrar, filtros) => {
+    let logsFiltrados = [...logsAFiltrar];
+
+    // Filtrar por usuario
+    if (filtros.usuario) {
+      logsFiltrados = logsFiltrados.filter(log => 
+        log.usuario === parseInt(filtros.usuario)
+      );
+    }
+
+    // Filtrar por tipo de acción
+    if (filtros.accion_realizada) {
+      logsFiltrados = logsFiltrados.filter(log => 
+        log.accion_realizada === filtros.accion_realizada
+      );
+    }
+
+    // Ordenar por fecha
+    logsFiltrados.sort((a, b) => {
+      const fechaA = new Date(a.fecha_hora_accion);
+      const fechaB = new Date(b.fecha_hora_accion);
+      
+      if (filtros.ordenFecha === 'asc') {
+        return fechaA - fechaB; // Más antiguos primero
+      } else {
+        return fechaB - fechaA; // Más recientes primero
+      }
+    });
+
+    setLogs(logsFiltrados);
+  };
+
+  /**
+   * Maneja el cambio de filtros.
+   */
+  const handleFiltroChange = (nombre, valor) => {
+    const nuevosFiltros = {
+      ...filtrosHistorial,
+      [nombre]: valor
+    };
+    setFiltrosHistorial(nuevosFiltros);
+    aplicarFiltros(logsOriginales, nuevosFiltros);
+  };
+
+  /**
+   * Limpia todos los filtros.
+   */
+  const limpiarFiltros = () => {
+    const filtrosLimpios = {
+      usuario: '',
+      accion_realizada: '',
+      ordenFecha: 'desc'
+    };
+    setFiltrosHistorial(filtrosLimpios);
+    aplicarFiltros(logsOriginales, filtrosLimpios);
   };
 
   /**
@@ -221,12 +303,22 @@ const ProjectDetails = () => {
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h1>{proyecto.nombre_proyecto}</h1>
-          <p className="text-muted">Estado: {proyecto.estado_display || proyecto.estado_proyecto}</p>
+          <p className="text-muted">Estado: { proyecto.estado_display || proyecto.estado_proyecto}</p>
         </div>
         <div className="btn-group">
+        <div className="d-flex gap-2">
+          <button 
+            className="btn btn-primary" 
+            onClick={() => navigate(`/proyecto/${id}/editar`)}
+            title="Editar proyecto"
+          >
+            <i className="bi bi-pencil me-2"></i>
+            Editar Proyecto
+          </button>
           <button className="btn btn-secondary" onClick={() => navigate('/')}>
             Volver al Dashboard
           </button>
+        </div>
           {/* Botón para gestionar equipo */}
           <button
             className="btn btn-outline-primary"
@@ -479,14 +571,100 @@ const ProjectDetails = () => {
             </div>
             {mostrarHistorial && (
               <div className="card-body">
+                {/* Filtros */}
+                <div className="row mb-3">
+                  <div className="col-md-3">
+                    <label htmlFor="filtro-usuario" className="form-label form-label-sm">
+                      <small>Filtrar por Usuario</small>
+                    </label>
+                    <select
+                      id="filtro-usuario"
+                      className="form-select form-select-sm"
+                      value={filtrosHistorial.usuario}
+                      onChange={(e) => handleFiltroChange('usuario', e.target.value)}
+                    >
+                      <option value="">Todos los usuarios</option>
+                      {usuarios.map(usuario => (
+                        <option key={usuario.id} value={usuario.id}>
+                          {usuario.first_name || usuario.last_name
+                            ? `${usuario.first_name || ''} ${usuario.last_name || ''}`.trim()
+                            : usuario.username}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-3">
+                    <label htmlFor="filtro-accion" className="form-label form-label-sm">
+                      <small>Filtrar por Acción</small>
+                    </label>
+                    <select
+                      id="filtro-accion"
+                      className="form-select form-select-sm"
+                      value={filtrosHistorial.accion_realizada}
+                      onChange={(e) => handleFiltroChange('accion_realizada', e.target.value)}
+                    >
+                      <option value="">Todas las acciones</option>
+                      <option value="creacion">Creación</option>
+                      <option value="modificacion">Modificación</option>
+                      <option value="aprobacion">Aprobación</option>
+                      <option value="rechazo">Rechazo</option>
+                      <option value="eliminacion">Eliminación</option>
+                    </select>
+                  </div>
+                  <div className="col-md-3">
+                    <label htmlFor="filtro-orden" className="form-label form-label-sm">
+                      <small>Ordenar por Fecha</small>
+                    </label>
+                    <select
+                      id="filtro-orden"
+                      className="form-select form-select-sm"
+                      value={filtrosHistorial.ordenFecha}
+                      onChange={(e) => handleFiltroChange('ordenFecha', e.target.value)}
+                    >
+                      <option value="desc">Más recientes primero</option>
+                      <option value="asc">Más antiguos primero</option>
+                    </select>
+                  </div>
+                  <div className="col-md-3 d-flex align-items-end">
+                    <button
+                      className="btn btn-sm btn-outline-secondary w-100"
+                      onClick={limpiarFiltros}
+                      disabled={!filtrosHistorial.usuario && !filtrosHistorial.accion_realizada && filtrosHistorial.ordenFecha === 'desc'}
+                    >
+                      Limpiar Filtros
+                    </button>
+                  </div>
+                </div>
+
+                {/* Información de resultados */}
+                <div className="mb-2">
+                  <small className="text-muted">
+                    Mostrando {logs.length} de {logsOriginales.length} registro(s)
+                    {(filtrosHistorial.usuario || filtrosHistorial.accion_realizada) && (
+                      <span className="ms-2">
+                        <span className="badge bg-info">
+                          Filtros activos
+                        </span>
+                      </span>
+                    )}
+                  </small>
+                </div>
+
                 {logs.length === 0 ? (
-                  <p className="text-muted text-center mb-0">No hay registros de acciones para este proyecto.</p>
+                  <p className="text-muted text-center mb-0">
+                    {logsOriginales.length === 0
+                      ? 'No hay registros de acciones para este proyecto.'
+                      : 'No hay registros que coincidan con los filtros seleccionados.'}
+                  </p>
                 ) : (
                   <div className="table-responsive">
                     <table className="table table-sm table-hover">
                       <thead>
                         <tr>
-                          <th>Fecha y Hora</th>
+                          <th>
+                            Fecha y Hora
+                            {filtrosHistorial.ordenFecha === 'desc' ? ' ↓' : ' ↑'}
+                          </th>
                           <th>Usuario</th>
                           <th>Acción</th>
                           <th>Transacción</th>

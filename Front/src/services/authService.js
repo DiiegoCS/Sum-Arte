@@ -47,11 +47,30 @@ export const login = async (username, password) => {
 
 /**
  * Cierra la sesión del usuario y elimina los datos almacenados.
+ * 
+ * Limpia completamente la sesión del usuario, incluyendo:
+ * - Tokens de acceso y actualización
+ * - Datos del usuario
+ * - Cualquier otro dato relacionado con la sesión
  */
 export const logout = () => {
+  // Limpiar tokens
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
+  
+  // Limpiar datos del usuario
   localStorage.removeItem('user');
+  
+  // Limpiar cualquier otro dato de sesión que pueda existir
+  // (por si acaso se agregaron otros datos en el futuro)
+  const keysToRemove = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key.startsWith('auth_') || key.startsWith('session_'))) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach(key => localStorage.removeItem(key));
 };
 
 /**

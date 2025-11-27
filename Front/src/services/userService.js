@@ -28,3 +28,29 @@ export const getUsuario = async (usuarioId) => {
   return response.data;
 };
 
+/**
+ * Obtiene el perfil del usuario autenticado.
+ * 
+ * @returns {Promise<Object>} Devuelve los datos del perfil del usuario
+ */
+export const getMiPerfil = async () => {
+  const response = await api.get('/usuarios/mi_perfil/');
+  return response.data;
+};
+
+/**
+ * Actualiza el perfil del usuario autenticado.
+ * 
+ * @param {Object} profileData - Datos del perfil a actualizar
+ * @param {string} profileData.first_name - Nombre (opcional)
+ * @param {string} profileData.last_name - Apellido (opcional)
+ * @param {string} profileData.email - Email (opcional)
+ * @param {string} profileData.password - Nueva contraseña (opcional)
+ * @param {string} profileData.password_confirm - Confirmación de contraseña (opcional)
+ * @returns {Promise<Object>} Devuelve el resultado de la actualización
+ */
+export const updateMiPerfil = async (profileData) => {
+  const response = await api.patch('/usuarios/mi_perfil/', profileData);
+  return response.data;
+};
+

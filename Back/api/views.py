@@ -16,9 +16,11 @@ from .serializers import (ProyectoSerializer, OrganizacionSerializer,UsuarioSeri
                           TransaccionSerializer, EvidenciaSerializer, TransaccionEvidenciaSerializer,
                           LogTransaccionSerializer, ItemPresupuestarioSerializer, SubitemPresupuestarioSerializer, 
                           RolSerializer, InvitacionUsuarioSerializer, AceptarInvitacionSerializer,
-                          EquipoProyectoSerializer, AgregarUsuarioEquipoSerializer, CambiarRolEquipoSerializer)
+                          EquipoProyectoSerializer, AgregarUsuarioEquipoSerializer, CambiarRolEquipoSerializer,
+                          PerfilUsuarioSerializer)
 from .permissions import (IsOrganizationMember, IsAdminProyecto, IsEjecutor, 
-                         IsAdminProyectoOrEjecutor, CanApproveTransaction, CanCreateTransaction)
+                         IsAdminProyectoOrEjecutor, CanApproveTransaction, CanCreateTransaction,
+                         IsAdminProyectoEnOrganizacion)
 from .utils import validar_rut_chileno
 
 class OrganizacionViewSet(viewsets.ModelViewSet):
@@ -134,9 +136,28 @@ class ProyectoViewSet(viewsets.ModelViewSet):
     ViewSet para gestionar proyectos.
     
     Los usuarios solo pueden acceder a proyectos de su organización.
+    - Crear: Solo administradores de proyecto en la organización
+    - Editar: Solo administradores del proyecto específico
+    - Ver: Cualquier miembro de la organización
     """
     serializer_class = ProyectoSerializer
     permission_classes = [IsAuthenticated, IsOrganizationMember]
+    
+    def get_permissions(self):
+        """
+        Instancia y retorna la lista de permisos que requiere esta vista.
+        """
+        if self.action == 'create':
+            # Solo administradores de proyecto pueden crear proyectos
+            permission_classes = [IsAuthenticated, IsAdminProyectoEnOrganizacion]
+        elif self.action in ['update', 'partial_update', 'destroy']:
+            # Solo administradores del proyecto específico pueden editarlo
+            permission_classes = [IsAuthenticated, IsAdminProyecto]
+        else:
+            # Ver y listar: cualquier miembro de la organización
+            permission_classes = [IsAuthenticated, IsOrganizationMember]
+        
+        return [permission() for permission in permission_classes]
     
     def get_queryset(self):
         """Filtra los proyectos según la organización del usuario."""
@@ -145,6 +166,32 @@ class ProyectoViewSet(viewsets.ModelViewSet):
             return Proyecto.objects.all()
         else:
             return Proyecto.objects.filter(id_organizacion=self.request.user.id_organizacion)
+    
+    def perform_create(self, serializer):
+        """
+        Asigna automáticamente la organización del usuario al crear el proyecto.
+        """
+        if not self.request.user.is_superuser:
+            # Usuarios normales: asignar automáticamente su organización
+            if not hasattr(self.request.user, 'id_organizacion') or not self.request.user.id_organizacion:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({
+                    'id_organizacion': 'El usuario no tiene una organización asignada.'
+                })
+            serializer.save(id_organizacion=self.request.user.id_organizacion)
+        else:
+            # Superusuarios: pueden proporcionar la organización o se asigna automáticamente
+            if 'id_organizacion' not in serializer.validated_data:
+                # Si no se proporcionó, intentar usar la del usuario si existe
+                if hasattr(self.request.user, 'id_organizacion') and self.request.user.id_organizacion:
+                    serializer.save(id_organizacion=self.request.user.id_organizacion)
+                else:
+                    from rest_framework.exceptions import ValidationError
+                    raise ValidationError({
+                        'id_organizacion': 'Debe proporcionar una organización para crear el proyecto.'
+                    })
+            else:
+                serializer.save()
     
     @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, IsOrganizationMember])
     def pre_rendicion(self, request, pk=None):
@@ -188,6 +235,50 @@ class ProyectoViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, IsOrganizationMember])
+    def reporte_rendicion_oficial(self, request, pk=None):
+        """
+        Genera el reporte oficial de rendición en PDF.
+        
+        Este endpoint solo está disponible para proyectos cerrados/completados.
+        
+        Returns:
+            HttpResponse con el PDF generado
+        """
+        from django.http import HttpResponse
+        from django.utils import timezone
+        from rest_framework import status
+        from rest_framework.response import Response
+        from .reports import generar_reporte_rendicion_oficial_pdf
+        
+        proyecto = self.get_object()
+        
+        # Valida permisos de organización
+        if not request.user.is_superuser:
+            if proyecto.id_organizacion != request.user.id_organizacion:
+                return Response(
+                    {'error': 'No tiene permiso para acceder a este proyecto.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Verificar que el proyecto esté cerrado/completado
+        if proyecto.estado_proyecto not in ['completado', 'cerrado']:
+            return Response(
+                {'error': 'El proyecto debe estar cerrado para generar el reporte oficial de rendición.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            buffer = generar_reporte_rendicion_oficial_pdf(proyecto)
+            response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="reporte_rendicion_oficial_{proyecto.id}_{timezone.now().strftime("%Y%m%d")}.pdf"'
+            return response
+        except Exception as e:
+            return Response(
+                {'error': f'Error al generar el reporte: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsAdminProyecto])
     def cerrar_rendicion(self, request, pk=None):
         """
@@ -223,6 +314,55 @@ class ProyectoViewSet(viewsets.ModelViewSet):
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, IsOrganizationMember])
+    def reporte_estado(self, request, pk=None):
+        """
+        Genera un reporte de estado del proyecto en PDF o Excel.
+        
+        Query params:
+            formato: 'pdf' o 'excel' (default: 'pdf')
+            
+        Returns:
+            HttpResponse con el archivo generado
+        """
+        from django.http import HttpResponse
+        from django.utils import timezone
+        from rest_framework import status
+        from rest_framework.response import Response
+        from .reports import generar_reporte_estado_proyecto_pdf, generar_reporte_estado_proyecto_excel
+        
+        proyecto = self.get_object()
+        
+        # Valida permisos de organización
+        if not request.user.is_superuser:
+            if proyecto.id_organizacion != request.user.id_organizacion:
+                return Response(
+                    {'error': 'No tiene permiso para acceder a este proyecto.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        formato = request.query_params.get('formato', 'pdf').lower()
+        
+        try:
+            if formato == 'excel':
+                buffer = generar_reporte_estado_proyecto_excel(proyecto)
+                response = HttpResponse(
+                    buffer.getvalue(),
+                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+                response['Content-Disposition'] = f'attachment; filename="reporte_estado_{proyecto.id}_{timezone.now().strftime("%Y%m%d")}.xlsx"'
+            else:  # PDF por defecto
+                buffer = generar_reporte_estado_proyecto_pdf(proyecto)
+                response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+                response['Content-Disposition'] = f'attachment; filename="reporte_estado_{proyecto.id}_{timezone.now().strftime("%Y%m%d")}.pdf"'
+            
+            return response
+        except Exception as e:
+            return Response(
+                {'error': f'Error al generar el reporte: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
     @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, IsOrganizationMember])
@@ -600,6 +740,53 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                 {'error': f'Error al crear el usuario: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+    
+    @action(detail=False, methods=['get', 'patch'], permission_classes=[IsAuthenticated])
+    def mi_perfil(self, request):
+        """
+        Obtiene o actualiza el perfil del usuario autenticado.
+        
+        GET: Retorna los datos del perfil del usuario actual.
+        PATCH: Actualiza solo los campos personales (first_name, last_name, email, password).
+        
+        Campos permitidos para editar:
+        - first_name
+        - last_name
+        - email
+        - password (requiere password_confirm)
+        
+        Campos NO editables desde aquí:
+        - username
+        - id_organizacion
+        - is_superuser
+        - is_active
+        """
+        from rest_framework.response import Response
+        from rest_framework import status
+        
+        usuario = request.user
+        
+        if request.method == 'GET':
+            serializer = UsuarioSerializer(usuario)
+            return Response(serializer.data)
+        
+        elif request.method == 'PATCH':
+            serializer = PerfilUsuarioSerializer(usuario, data=request.data, partial=True)
+            
+            if serializer.is_valid():
+                serializer.save()
+                # Retornar datos actualizados con UsuarioSerializer
+                usuario.refresh_from_db()
+                response_serializer = UsuarioSerializer(usuario)
+                return Response(
+                    {
+                        'mensaje': 'Perfil actualizado exitosamente.',
+                        'usuario': response_serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+            
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class InvitacionUsuarioViewSet(viewsets.ModelViewSet):

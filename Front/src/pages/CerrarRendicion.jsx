@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getProject, getPreRendicion, cerrarRendicion } from '../services/projectService';
+import { getProject, getPreRendicion, cerrarRendicion, descargarReporteRendicionOficial } from '../services/projectService';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -23,6 +23,7 @@ const CerrarRendicion = () => {
   const [loading, setLoading] = useState(true);
   const [cerrando, setCerrando] = useState(false);
   const [confirmado, setConfirmado] = useState(false);
+  const [descargandoReporte, setDescargandoReporte] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -46,6 +47,23 @@ const CerrarRendicion = () => {
       console.error('Error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Descarga el reporte oficial de rendición.
+   */
+  const handleDescargarReporteOficial = async () => {
+    try {
+      setDescargandoReporte(true);
+      await descargarReporteRendicionOficial(id);
+      toast.success('Reporte oficial de rendición descargado exitosamente');
+    } catch (error) {
+      console.error('Error al descargar reporte:', error);
+      const errorMsg = error.response?.data?.error || error.message || 'Error al descargar el reporte';
+      toast.error(errorMsg);
+    } finally {
+      setDescargandoReporte(false);
     }
   };
 
@@ -112,13 +130,35 @@ const CerrarRendicion = () => {
           <h1>Cerrar Rendición: {proyecto.nombre_proyecto}</h1>
           <p className="text-muted">Acción final que bloquea ediciones futuras</p>
         </div>
-        <button 
-          className="btn btn-secondary" 
-          onClick={() => navigate(`/proyecto/${id}/pre-rendicion`)}
-          disabled={cerrando}
-        >
-          Volver a Pre-Rendición
-        </button>
+        <div className="d-flex gap-2">
+          {(proyecto.estado_proyecto === 'completado' || proyecto.estado_proyecto === 'cerrado') && (
+            <button
+              className="btn btn-primary"
+              onClick={handleDescargarReporteOficial}
+              disabled={descargandoReporte}
+              title="Descargar reporte oficial de rendición"
+            >
+              {descargandoReporte ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                  Generando...
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-file-pdf me-2"></i>
+                  Reporte Oficial
+                </>
+              )}
+            </button>
+          )}
+          <button 
+            className="btn btn-secondary" 
+            onClick={() => navigate(`/proyecto/${id}/pre-rendicion`)}
+            disabled={cerrando}
+          >
+            Volver a Pre-Rendición
+          </button>
+        </div>
       </div>
 
       {/* Advertencia importante */}

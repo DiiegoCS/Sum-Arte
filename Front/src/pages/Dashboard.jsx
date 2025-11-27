@@ -106,9 +106,15 @@ const Dashboard = () => {
       
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1>Dashboard Ejecutivo</h1>
-        <Link to="/registrar-gasto" className="btn btn-primary">
-          Nuevo Gasto +
-        </Link>
+        <div className="d-flex gap-2">
+          <Link to="/crear-proyecto" className="btn btn-success">
+            <i className="bi bi-plus-circle me-2"></i>
+            Nuevo Proyecto
+          </Link>
+          <Link to="/registrar-gasto" className="btn btn-primary">
+            Nuevo Gasto +
+          </Link>
+        </div>
       </div>
 
       {/* Tarjetas de resumen */}
@@ -193,7 +199,11 @@ const Dashboard = () => {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    label={({ name, percent }) => {
+                      // Solo mostrar label si el porcentaje es mayor a 5% para evitar textos superpuestos
+                      if (percent < 0.05) return '';
+                      return `${name}: ${(percent * 100).toFixed(0)}%`;
+                    }}
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="value"

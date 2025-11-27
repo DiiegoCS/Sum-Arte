@@ -26,13 +26,14 @@ class IsOrganizationMember(BasePermission):
         """
         Verifica si el usuario tiene permiso para acceder al objeto.
         
-        Argumentos:
-            request: El objeto request
+        Args:
+            request: El objeto request de Django REST Framework
             view: La vista a la que se accede
-            obj: El objeto que se accede
+            obj: El objeto que se accede (puede ser Proyecto, Organizacion, etc.)
             
-        Retorna:
-            True si el usuario es superusuario o pertenece a la misma organización que obj
+        Returns:
+            bool: True si el usuario es superusuario o pertenece a la misma organización que obj,
+                  False en caso contrario
         """
         # Los superusuarios tienen acceso a todo
         if request.user.is_superuser:
@@ -78,13 +79,14 @@ class HasProjectRole(BasePermission):
         """
         Verifica si el usuario tiene el rol requerido para el objeto específico.
         
-        Argumentos:
-            request: El objeto request
+        Args:
+            request: El objeto request de Django REST Framework
             view: La vista a la que se accede
             obj: El objeto al que se accede (usualmente un Proyecto u objeto relacionado)
             
-        Retorna:
-            True si el usuario tiene alguno de los roles requeridos en el proyecto
+        Returns:
+            bool: True si el usuario tiene alguno de los roles requeridos en el proyecto,
+                  False en caso contrario
         """
         if request.user.is_superuser:
             return True
@@ -114,6 +116,48 @@ class IsAdminProyecto(HasProjectRole):
     para el proyecto correspondiente.
     """
     required_roles = [ROL_ADMIN_PRYECTO]
+
+
+class IsAdminProyectoEnOrganizacion(BasePermission):
+    """
+    Clase de permiso que verifica si el usuario es Administrador de Proyecto
+    en al menos un proyecto de su organización.
+    
+    Útil para permitir crear nuevos proyectos solo a usuarios que ya tienen
+    el rol de administrador en algún proyecto de su organización.
+    """
+    
+    def has_permission(self, request, view):
+        """
+        Verifica si el usuario es administrador de proyecto en su organización.
+        
+        Args:
+            request: El objeto request de Django REST Framework
+            view: La vista a la que se accede
+            
+        Returns:
+            bool: True si el usuario es superusuario o tiene rol de administrador
+                  de proyecto en al menos un proyecto de su organización,
+                  False en caso contrario
+        """
+        if request.user.is_superuser:
+            return True
+        
+        if not request.user.is_authenticated:
+            return False
+        
+        # Verifica si el usuario tiene el rol de administrador de proyecto
+        # en al menos un proyecto de su organización
+        if not hasattr(request.user, 'id_organizacion') or not request.user.id_organizacion:
+            return False
+        
+        user_roles = Usuario_Rol_Proyecto.objects.filter(
+            usuario=request.user,
+            proyecto__id_organizacion=request.user.id_organizacion,
+            rol__nombre_rol=ROL_ADMIN_PRYECTO
+        )
+        
+        return user_roles.exists()
 
 
 class IsEjecutor(HasProjectRole):
@@ -166,13 +210,14 @@ class CanApproveTransaction(BasePermission):
         """
         Verifica si el usuario puede aprobar la transacción específica.
         
-        Argumentos:
-            request: El objeto request
+        Args:
+            request: El objeto request de Django REST Framework
             view: La vista a la que se accede
-            obj: El objeto transacción
+            obj: El objeto Transaccion a aprobar
             
-        Retorna:
-            True si el usuario puede aprobar la transacción
+        Returns:
+            bool: True si el usuario puede aprobar la transacción (es admin del proyecto
+                  y no es el creador), False en caso contrario
         """
         if request.user.is_superuser:
             return True
@@ -205,6 +250,14 @@ class CanCreateTransaction(BasePermission):
     def has_permission(self, request, view):
         """
         Verifica si el usuario puede crear transacciones.
+        
+        Args:
+            request: El objeto request de Django REST Framework
+            view: La vista a la que se accede
+            
+        Returns:
+            bool: True si el usuario es superusuario o la verificación se hace a nivel
+                  de objeto, False en caso contrario
         """
         if request.user.is_superuser:
             return True
@@ -214,13 +267,14 @@ class CanCreateTransaction(BasePermission):
         """
         Verifica si el usuario puede crear transacciones para este proyecto.
         
-        Argumentos:
-            request: El objeto request
+        Args:
+            request: El objeto request de Django REST Framework
             view: La vista a la que se accede
-            obj: El objeto proyecto
+            obj: El objeto Proyecto para el cual se quiere crear la transacción
             
-        Retorna:
-            True si el usuario puede crear transacciones
+        Returns:
+            bool: True si el usuario es superusuario o tiene rol de Ejecutor o
+                  Administrador de Proyecto en el proyecto, False en caso contrario
         """
         if request.user.is_superuser:
             return True
@@ -253,12 +307,13 @@ class CanViewDashboard(BasePermission):
         """
         Verifica si el usuario puede ver el dashboard.
         
-        Argumentos:
-            request: El objeto request
+        Args:
+            request: El objeto request de Django REST Framework
             view: La vista a la que se accede
             
-        Retorna:
-            True si el usuario tiene algún rol de proyecto o es superusuario
+        Returns:
+            bool: True si el usuario es superusuario o tiene algún rol en algún proyecto,
+                  False en caso contrario
         """
         if request.user.is_superuser:
             return True

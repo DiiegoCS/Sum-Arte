@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getProject, getPreRendicion } from '../services/projectService';
+import { getProject, getPreRendicion, descargarReporteEstado } from '../services/projectService';
 import { getTransactions } from '../services/transactionService';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -23,6 +23,7 @@ const PreRendicion = () => {
   const [validacion, setValidacion] = useState(null);
   const [transacciones, setTransacciones] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [descargandoReporte, setDescargandoReporte] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -63,6 +64,22 @@ const PreRendicion = () => {
     navigate(`/proyecto/${id}/cerrar-rendicion`);
   };
 
+  /**
+   * Descarga el reporte de estado del proyecto.
+   */
+  const handleDescargarReporte = async (formato = 'pdf') => {
+    try {
+      setDescargandoReporte(true);
+      await descargarReporteEstado(id, formato);
+      toast.success(`Reporte ${formato.toUpperCase()} descargado exitosamente`);
+    } catch (error) {
+      console.error('Error al descargar reporte:', error);
+      toast.error('Error al descargar el reporte');
+    } finally {
+      setDescargandoReporte(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="container mt-4">
@@ -95,9 +112,52 @@ const PreRendicion = () => {
           <h1>Pre-Rendición: {proyecto.nombre_proyecto}</h1>
           <p className="text-muted">Validación de integridad antes de cerrar la rendición</p>
         </div>
-        <button className="btn btn-secondary" onClick={() => navigate(`/proyecto/${id}`)}>
-          Volver al Proyecto
-        </button>
+        <div className="d-flex gap-2">
+          <div className="btn-group">
+            <button
+              className="btn btn-primary"
+              onClick={() => handleDescargarReporte('pdf')}
+              disabled={descargandoReporte}
+              title="Descargar reporte en PDF"
+            >
+              {descargandoReporte ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                  Generando...
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-file-pdf me-2"></i>
+                  PDF
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary dropdown-toggle dropdown-toggle-split"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+              disabled={descargandoReporte}
+            >
+              <span className="visually-hidden">Toggle Dropdown</span>
+            </button>
+            <ul className="dropdown-menu">
+              <li>
+                <button
+                  className="dropdown-item"
+                  onClick={() => handleDescargarReporte('excel')}
+                  disabled={descargandoReporte}
+                >
+                  <i className="bi bi-file-excel me-2"></i>
+                  Excel
+                </button>
+              </li>
+            </ul>
+          </div>
+          <button className="btn btn-secondary" onClick={() => navigate(`/proyecto/${id}`)}>
+            Volver al Proyecto
+          </button>
+        </div>
       </div>
 
       {/* Resumen de transacciones */}

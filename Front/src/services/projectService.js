@@ -32,6 +32,11 @@ export const getProject = async (projectId) => {
  * Crea un nuevo proyecto.
  * 
  * @param {Object} projectData - Datos del proyecto a crear
+ * @param {string} projectData.nombre_proyecto - Nombre del proyecto
+ * @param {string} projectData.fecha_inicio_proyecto - Fecha de inicio (YYYY-MM-DD)
+ * @param {string} projectData.fecha_fin_proyecto - Fecha de fin (YYYY-MM-DD)
+ * @param {number} projectData.presupuesto_total - Presupuesto total
+ * @param {string} projectData.estado_proyecto - Estado del proyecto (opcional)
  * @returns {Promise<Object>} Devuelve el proyecto creado
  */
 export const createProject = async (projectData) => {
@@ -40,16 +45,18 @@ export const createProject = async (projectData) => {
 };
 
 /**
- * Actualiza los datos de un proyecto existente.
+ * Actualiza un proyecto existente.
  * 
  * @param {number} projectId - ID del proyecto a actualizar
- * @param {Object} projectData - Datos actualizados del proyecto
+ * @param {Object} projectData - Datos del proyecto a actualizar
  * @returns {Promise<Object>} Devuelve el proyecto actualizado
  */
 export const updateProject = async (projectId, projectData) => {
   const response = await api.patch(`/proyectos/${projectId}/`, projectData);
   return response.data;
 };
+
+// Eliminadas las declaraciones duplicadas de createProject y updateProject para evitar errores y mejorar la mantenibilidad del código.
 
 /**
  * Obtiene los ítems presupuestarios asociados a un proyecto.
@@ -170,6 +177,61 @@ export const cambiarRolEquipo = async (projectId, usuarioId, rolId) => {
     rol_id: rolId
   });
   return response.data;
+};
+
+/**
+ * Descarga el reporte de estado del proyecto en PDF o Excel.
+ * 
+ * @param {number} projectId - ID del proyecto
+ * @param {string} formato - 'pdf' o 'excel' (default: 'pdf')
+ * @returns {Promise<void>} Descarga el archivo
+ */
+export const descargarReporteEstado = async (projectId, formato = 'pdf') => {
+  const response = await api.get(`/proyectos/${projectId}/reporte_estado/`, {
+    params: { formato },
+    responseType: 'blob'  // Importante para descargar archivos binarios
+  });
+  
+  // Crear URL temporal para descargar el archivo
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  
+  // Determinar extensión del archivo
+  const extension = formato === 'excel' ? 'xlsx' : 'pdf';
+  const fecha = new Date().toISOString().split('T')[0].replace(/-/g, '');
+  link.setAttribute('download', `reporte_estado_${projectId}_${fecha}.${extension}`);
+  
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+/**
+ * Descarga el reporte oficial de rendición en PDF.
+ * Solo disponible para proyectos cerrados/completados.
+ * 
+ * @param {number} projectId - ID del proyecto
+ * @returns {Promise<void>} Descarga el archivo PDF
+ */
+export const descargarReporteRendicionOficial = async (projectId) => {
+  const response = await api.get(`/proyectos/${projectId}/reporte_rendicion_oficial/`, {
+    responseType: 'blob'  // Importante para descargar archivos binarios
+  });
+  
+  // Crear URL temporal para descargar el archivo
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  
+  const fecha = new Date().toISOString().split('T')[0].replace(/-/g, '');
+  link.setAttribute('download', `reporte_rendicion_oficial_${projectId}_${fecha}.pdf`);
+  
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 };
 
 

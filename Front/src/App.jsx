@@ -13,6 +13,8 @@ import CreateOrganization from './pages/CreateOrganization';
 import InviteUser from './pages/InviteUser';
 import AcceptInvitation from './pages/AcceptInvitation';
 import ProjectTeam from './pages/ProjectTeam';
+import CreateEditProject from './pages/CreateEditProject';
+import UserProfile from './pages/UserProfile';
 
 function App() {
   return (
@@ -54,6 +56,39 @@ function App() {
                   <>
                     <Navbar />
                     <ProjectTeam />
+                  </>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/crear-proyecto"
+              element={
+                <ProtectedRoute>
+                  <>
+                    <Navbar />
+                    <CreateEditProject />
+                  </>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/proyecto/:id/editar"
+              element={
+                <ProtectedRoute>
+                  <>
+                    <Navbar />
+                    <CreateEditProject />
+                  </>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/mi-perfil"
+              element={
+                <ProtectedRoute>
+                  <>
+                    <Navbar />
+                    <UserProfile />
                   </>
                 </ProtectedRoute>
               }
