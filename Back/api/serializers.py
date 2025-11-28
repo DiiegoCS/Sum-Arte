@@ -281,25 +281,15 @@ class LogTransaccionSerializer(serializers.ModelSerializer):
     usuario_nombre = serializers.CharField(source='usuario.username', read_only=True)
     usuario_nombre_completo = serializers.SerializerMethodField()
     accion_display = serializers.CharField(source='get_accion_realizada_display', read_only=True)
-    transaccion_nro_documento = serializers.CharField(
-        source='transaccion.nro_documento',
-        read_only=True
-    )
-    transaccion_monto = serializers.DecimalField(
-        source='transaccion.monto_transaccion',
-        read_only=True,
-        max_digits=12,
-        decimal_places=2
-    )
-    proyecto_nombre = serializers.CharField(
-        source='transaccion.proyecto.nombre_proyecto',
-        read_only=True
-    )
+    transaccion_nro_documento = serializers.SerializerMethodField()
+    transaccion_monto = serializers.SerializerMethodField()
+    proyecto_nombre = serializers.SerializerMethodField()
+    transaccion_id = serializers.SerializerMethodField()
     
     class Meta:
         model = Log_transaccion
         fields = [
-            'id', 'transaccion', 'transaccion_nro_documento', 'transaccion_monto',
+            'id', 'transaccion', 'transaccion_id', 'transaccion_nro_documento', 'transaccion_monto',
             'proyecto_nombre', 'usuario', 'usuario_nombre', 'usuario_nombre_completo',
             'fecha_hora_accion', 'accion_realizada', 'accion_display'
         ]
@@ -310,6 +300,32 @@ class LogTransaccionSerializer(serializers.ModelSerializer):
         if obj.usuario.first_name or obj.usuario.last_name:
             return f"{obj.usuario.first_name or ''} {obj.usuario.last_name or ''}".strip()
         return obj.usuario.username
+    
+    def get_transaccion_nro_documento(self, obj):
+        """Retorna el número de documento de la transacción, incluso si fue eliminada."""
+        if obj.transaccion:
+            return obj.transaccion.nro_documento
+        return obj.transaccion_nro_documento or 'N/A (eliminada)'
+    
+    def get_transaccion_monto(self, obj):
+        """Retorna el monto de la transacción, incluso si fue eliminada."""
+        if obj.transaccion:
+            return obj.transaccion.monto_transaccion
+        return obj.transaccion_monto
+    
+    def get_proyecto_nombre(self, obj):
+        """Retorna el nombre del proyecto, incluso si la transacción fue eliminada."""
+        if obj.transaccion:
+            return obj.transaccion.proyecto.nombre_proyecto
+        elif obj.proyecto:
+            return obj.proyecto.nombre_proyecto
+        return 'N/A'
+    
+    def get_transaccion_id(self, obj):
+        """Retorna el ID de la transacción, incluso si fue eliminada."""
+        if obj.transaccion:
+            return obj.transaccion.id
+        return obj.transaccion_id_eliminada
 
 class TransaccionSerializer(serializers.ModelSerializer):
     """Serializador para transacciones, con relaciones anidadas y validaciones."""
@@ -347,6 +363,7 @@ class TransaccionSerializer(serializers.ModelSerializer):
     # Campos calculados
     puede_editar = serializers.SerializerMethodField()
     puede_aprobar = serializers.SerializerMethodField()
+    puede_editar_eliminar = serializers.SerializerMethodField()
     
     class Meta:
         model = Transaccion
@@ -384,6 +401,15 @@ class TransaccionSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request and request.user:
             return obj.puede_aprobar(request.user)
+        return False
+    
+    def get_puede_editar_eliminar(self, obj):
+        """Indica si el usuario actual puede editar o eliminar la transacción."""
+        from .permissions import CanEditDeleteTransaction
+        request = self.context.get('request')
+        if request and request.user:
+            permission = CanEditDeleteTransaction()
+            return permission.has_object_permission(request, None, obj)
         return False
     
     def validate(self, data):

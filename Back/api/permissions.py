@@ -325,3 +325,56 @@ class CanViewDashboard(BasePermission):
         
         return has_role
 
+
+class CanEditDeleteTransaction(BasePermission):
+    """
+    Clase de permiso que verifica si el usuario puede editar o eliminar transacciones.
+    
+    Requisitos:
+    - El usuario debe ser Administrador de Proyecto para el proyecto de la transacción
+    - La transacción debe estar en estado 'pendiente' para ser editada
+    - Para eliminar, se permite si es admin del proyecto (incluso si está aprobada, 
+      pero se debe revertir el presupuesto)
+    """
+    
+    def has_permission(self, request, view):
+        """
+        Verifica si el usuario tiene permiso para realizar la acción.
+        
+        Args:
+            request: El objeto request de Django REST Framework
+            view: La vista a la que se accede
+            
+        Returns:
+            bool: True si el usuario está autenticado (la verificación específica
+                  se hace en has_object_permission), False en caso contrario
+        """
+        if request.user.is_superuser:
+            return True
+        return request.user.is_authenticated
+    
+    def has_object_permission(self, request, view, obj):
+        """
+        Verifica si el usuario puede editar o eliminar la transacción específica.
+        
+        Args:
+            request: El objeto request de Django REST Framework
+            view: La vista a la que se accede
+            obj: El objeto Transaccion a editar/eliminar
+            
+        Returns:
+            bool: True si el usuario es superusuario o es admin del proyecto,
+                  False en caso contrario
+        """
+        if request.user.is_superuser:
+            return True
+            
+        # Verifica si el usuario es Administrador de Proyecto para este proyecto
+        is_admin = Usuario_Rol_Proyecto.objects.filter(
+            usuario=request.user,
+            proyecto=obj.proyecto,
+            rol__nombre_rol=ROL_ADMIN_PRYECTO
+        ).exists()
+        
+        return is_admin
+

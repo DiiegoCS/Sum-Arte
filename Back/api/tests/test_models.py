@@ -67,12 +67,16 @@ class ProyectoModelTest(TestCase):
     
     def test_monto_disponible(self):
         """Test: El monto disponible se calcula correctamente."""
-        monto_disponible = self.proyecto.presupuesto_total - self.proyecto.monto_ejecutado_proyecto
+        from decimal import Decimal
+        monto_disponible = Decimal(str(self.proyecto.presupuesto_total)) - Decimal(str(self.proyecto.monto_ejecutado_proyecto))
         self.assertEqual(monto_disponible, Decimal('1000000.00'))
     
     def test_porcentaje_ejecutado(self):
         """Test: El porcentaje ejecutado se calcula correctamente."""
-        porcentaje = self.proyecto.monto_ejecutado_proyecto / self.proyecto.presupuesto_total * 100
+        from decimal import Decimal
+        monto_ejecutado = Decimal(str(self.proyecto.monto_ejecutado_proyecto))
+        presupuesto_total = Decimal(str(self.proyecto.presupuesto_total))
+        porcentaje = float((monto_ejecutado / presupuesto_total) * 100)
         self.assertEqual(porcentaje, 0.0)
 
 
@@ -108,7 +112,8 @@ class ItemPresupuestarioModelTest(TestCase):
     
     def test_saldo_disponible(self):
         """Test: El saldo disponible se calcula correctamente."""
-        saldo = self.item.monto_asignado_item - self.item.monto_ejecutado_item
+        from decimal import Decimal
+        saldo = self.item.saldo_disponible
         self.assertEqual(saldo, Decimal('500000.00'))
     
     def test_porcentaje_ejecutado(self):

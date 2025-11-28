@@ -234,4 +234,78 @@ export const descargarReporteRendicionOficial = async (projectId) => {
   window.URL.revokeObjectURL(url);
 };
 
+/**
+ * Crea un nuevo ítem presupuestario.
+ * 
+ * @param {Object} itemData - Datos del ítem
+ * @param {number} itemData.proyecto - ID del proyecto
+ * @param {string} itemData.nombre_item_presupuesto - Nombre del ítem
+ * @param {number} itemData.monto_asignado_item - Monto asignado
+ * @param {string} itemData.categoria_item - Categoría del ítem (opcional)
+ * @returns {Promise<Object>} Devuelve el ítem creado
+ */
+export const createBudgetItem = async (itemData) => {
+  const response = await api.post('/items-presupuestarios/', itemData);
+  return response.data;
+};
+
+/**
+ * Actualiza un ítem presupuestario existente.
+ * 
+ * @param {number} itemId - ID del ítem
+ * @param {Object} itemData - Datos del ítem a actualizar
+ * @returns {Promise<Object>} Devuelve el ítem actualizado
+ */
+export const updateBudgetItem = async (itemId, itemData) => {
+  const response = await api.patch(`/items-presupuestarios/${itemId}/`, itemData);
+  return response.data;
+};
+
+/**
+ * Elimina un ítem presupuestario.
+ * 
+ * @param {number} itemId - ID del ítem a eliminar
+ * @returns {Promise<void>}
+ */
+export const deleteBudgetItem = async (itemId) => {
+  await api.delete(`/items-presupuestarios/${itemId}/`);
+};
+
+/**
+ * Crea un nuevo subítem presupuestario.
+ * 
+ * @param {Object} subitemData - Datos del subítem
+ * @param {number} subitemData.item_presupuesto - ID del ítem padre
+ * @param {string} subitemData.nombre_subitem_presupuesto - Nombre del subítem
+ * @param {number} subitemData.monto_asignado_subitem - Monto asignado
+ * @param {string} subitemData.categoria_subitem - Categoría del subítem (opcional)
+ * @returns {Promise<Object>} Devuelve el subítem creado
+ */
+export const createSubitem = async (subitemData) => {
+  const response = await api.post('/subitems-presupuestarios/', subitemData);
+  return response.data;
+};
+
+/**
+ * Actualiza un subítem presupuestario existente.
+ * 
+ * @param {number} subitemId - ID del subítem
+ * @param {Object} subitemData - Datos del subítem a actualizar
+ * @returns {Promise<Object>} Devuelve el subítem actualizado
+ */
+export const updateSubitem = async (subitemId, subitemData) => {
+  const response = await api.patch(`/subitems-presupuestarios/${subitemId}/`, subitemData);
+  return response.data;
+};
+
+/**
+ * Elimina un subítem presupuestario.
+ * 
+ * @param {number} subitemId - ID del subítem a eliminar
+ * @returns {Promise<void>}
+ */
+export const deleteSubitem = async (subitemId) => {
+  await api.delete(`/subitems-presupuestarios/${subitemId}/`);
+};
+
 

@@ -97,6 +97,11 @@ const Navbar = () => {
                 Registrar Gasto
               </Link>
             </li>
+            <li className="nav-item">
+              <Link className="nav-link" to="/Invitar-usuario">
+                Invitar Usuario
+              </Link>
+            </li>
           </ul>
           <ul className="navbar-nav">
             {user && (

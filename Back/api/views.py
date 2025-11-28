@@ -20,7 +20,7 @@ from .serializers import (ProyectoSerializer, OrganizacionSerializer,UsuarioSeri
                           PerfilUsuarioSerializer)
 from .permissions import (IsOrganizationMember, IsAdminProyecto, IsEjecutor, 
                          IsAdminProyectoOrEjecutor, CanApproveTransaction, CanCreateTransaction,
-                         IsAdminProyectoEnOrganizacion)
+                         IsAdminProyectoEnOrganizacion, CanEditDeleteTransaction)
 from .utils import validar_rut_chileno
 
 class OrganizacionViewSet(viewsets.ModelViewSet):
@@ -939,6 +939,7 @@ class TransaccionViewSet(viewsets.ModelViewSet):
     
     - El ejecutor y el admin de proyecto pueden crear transacciones.
     - El admin de proyecto puede aprobar/rechazar transacciones.
+    - El admin de proyecto puede editar/eliminar transacciones.
     - Los usuarios pueden ver transacciones de los proyectos de su organización.
     """
     queryset = Transaccion.objects.all()
@@ -948,6 +949,23 @@ class TransaccionViewSet(viewsets.ModelViewSet):
     search_fields = ['nro_documento', 'proveedor__nombre_proveedor']
     ordering_fields = ['fecha_registro', 'fecha_creacion', 'monto_transaccion']
     ordering = ['-fecha_registro']
+    
+    def get_permissions(self):
+        """
+        Permisos dinámicos según la acción.
+        
+        - create: CanCreateTransaction
+        - update/partial_update/destroy: CanEditDeleteTransaction (solo admin proyecto)
+        - approve/reject: CanApproveTransaction
+        - list/retrieve: IsAuthenticated
+        """
+        if self.action in ['update', 'partial_update', 'destroy']:
+            return [IsAuthenticated(), CanEditDeleteTransaction()]
+        elif self.action in ['approve', 'reject']:
+            return [IsAuthenticated(), CanApproveTransaction()]
+        elif self.action == 'create':
+            return [IsAuthenticated(), CanCreateTransaction()]
+        return [IsAuthenticated()]
     
     def get_queryset(self):
         """Filtra las transacciones según la organización del usuario."""
@@ -1005,10 +1023,15 @@ class TransaccionViewSet(viewsets.ModelViewSet):
         """
         Actualiza una transacción.
         
-        Solo permite actualizar si la transacción está en estado 'pendiente'.
+        Solo permite actualizar si:
+        - El usuario es Administrador de Proyecto
+        - La transacción está en estado 'pendiente'
+        - El proyecto no está bloqueado
         """
         from rest_framework.response import Response
         from rest_framework import status
+        from .validators import validar_proyecto_no_bloqueado, validar_duplicidad
+        from .exceptions import ProyectoBloqueadoException, TransaccionDuplicadaException
         
         instance = self.get_object()
         
@@ -1019,8 +1042,41 @@ class TransaccionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Verifica que el proyecto no esté bloqueado
+        try:
+            validar_proyecto_no_bloqueado(instance.proyecto)
+        except ProyectoBloqueadoException as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         serializer = self.get_serializer(instance, data=request.data, partial=kwargs.get('partial', False))
         serializer.is_valid(raise_exception=True)
+        
+        # Validar duplicidad si cambió proveedor o nro_documento
+        validated_data = serializer.validated_data
+        nuevo_proveedor = validated_data.get('proveedor', instance.proveedor)
+        nuevo_nro_documento = validated_data.get('nro_documento', instance.nro_documento)
+        
+        # Asegurarse de que tenemos instancias de Proveedor para comparar
+        if hasattr(nuevo_proveedor, 'id'):
+            nuevo_proveedor_id = nuevo_proveedor.id
+        else:
+            nuevo_proveedor_id = nuevo_proveedor
+        
+        if nuevo_proveedor_id != instance.proveedor.id or nuevo_nro_documento != instance.nro_documento:
+            try:
+                # Asegurarse de que tenemos una instancia de Proveedor
+                if not hasattr(nuevo_proveedor, 'id'):
+                    from .models import Proveedor
+                    nuevo_proveedor = Proveedor.objects.get(id=nuevo_proveedor_id)
+                validar_duplicidad(nuevo_proveedor, nuevo_nro_documento, transaccion_id=instance.id)
+            except TransaccionDuplicadaException as e:
+                return Response(
+                    {'error': str(e)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         
         try:
             self.perform_update(serializer)
@@ -1028,6 +1084,92 @@ class TransaccionViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response(
                 {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def destroy(self, request, *args, **kwargs):
+        """
+        Elimina una transacción.
+        
+        Solo permite eliminar si:
+        - El usuario es Administrador de Proyecto
+        - Si la transacción está aprobada, se revierten los montos ejecutados
+        - El proyecto no está bloqueado (solo para transacciones aprobadas)
+        """
+        from rest_framework.response import Response
+        from rest_framework import status
+        from .validators import validar_proyecto_no_bloqueado
+        from .exceptions import ProyectoBloqueadoException
+        from django.db import transaction as db_transaction
+        
+        instance = self.get_object()
+        
+        # Si la transacción está aprobada, verificar que el proyecto no esté bloqueado
+        if instance.estado_transaccion == 'aprobado':
+            try:
+                validar_proyecto_no_bloqueado(instance.proyecto)
+            except ProyectoBloqueadoException as e:
+                return Response(
+                    {'error': f'No se puede eliminar una transacción aprobada de un proyecto bloqueado: {str(e)}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        try:
+            with db_transaction.atomic():
+                # Si está aprobada, revertir los montos ejecutados
+                if instance.estado_transaccion == 'aprobado':
+                    # Revertir montos (restar en lugar de sumar)
+                    monto = instance.monto_transaccion
+                    
+                    if instance.subitem_presupuestario:
+                        subitem = instance.subitem_presupuestario
+                        from decimal import Decimal
+                        subitem.monto_ejecutado_subitem = Decimal(str(subitem.monto_ejecutado_subitem)) - monto
+                        subitem.save()
+                        
+                        item = subitem.item_presupuesto
+                        item.monto_ejecutado_item = Decimal(str(item.monto_ejecutado_item)) - monto
+                        item.save()
+                    elif instance.item_presupuestario:
+                        item = instance.item_presupuestario
+                        from decimal import Decimal
+                        item.monto_ejecutado_item = Decimal(str(item.monto_ejecutado_item)) - monto
+                        item.save()
+                    
+                    # Revertir monto ejecutado del proyecto
+                    proyecto = instance.proyecto
+                    from decimal import Decimal
+                    if instance.tipo_transaccion == 'egreso':
+                        proyecto.monto_ejecutado_proyecto = Decimal(str(proyecto.monto_ejecutado_proyecto)) - monto
+                    else:  # Si es ingreso
+                        proyecto.presupuesto_total = Decimal(str(proyecto.presupuesto_total)) - monto
+                    proyecto.save()
+                
+                # Crear log de eliminación ANTES de eliminar la transacción
+                # Guardar información de la transacción para mantener trazabilidad
+                from .models import Log_transaccion, ACCION_LOG_DELETE
+                usuario_accion = getattr(instance, '_usuario_accion', None) or request.user
+                if usuario_accion:
+                    Log_transaccion.objects.create(
+                        transaccion=instance,  # Se establecerá como null después de eliminar
+                        transaccion_id_eliminada=instance.id,
+                        transaccion_nro_documento=instance.nro_documento,
+                        transaccion_monto=instance.monto_transaccion,
+                        proyecto=instance.proyecto,
+                        usuario=usuario_accion,
+                        accion_realizada=ACCION_LOG_DELETE
+                    )
+                
+                # Eliminar la transacción
+                instance.delete()
+                
+                return Response(
+                    {'message': 'Transacción eliminada exitosamente.'},
+                    status=status.HTTP_200_OK
+                )
+        except Exception as e:
+            return Response(
+                {'error': f'Error al eliminar la transacción: {str(e)}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
     
@@ -1415,7 +1557,10 @@ class ItemPresupuestarioViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filtra los ítems presupuestarios por proyecto y organización."""
-        queryset = Item_Presupuestario.objects.all()
+        # Usar el related_name 'subitems' que definimos en el modelo
+        queryset = Item_Presupuestario.objects.prefetch_related(
+            'subitems'
+        ).all()
         
         # Filtra por organización
         if not self.request.user.is_superuser:

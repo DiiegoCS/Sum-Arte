@@ -210,28 +210,32 @@ class BudgetService:
         """
         monto = transaccion.monto_transaccion
         
+        from decimal import Decimal
+        # Asegurar que monto sea Decimal
+        monto_decimal = Decimal(str(monto))
+        
         # Se actualiza el subítem si existe
         if transaccion.subitem_presupuestario:
             subitem = transaccion.subitem_presupuestario
-            subitem.monto_ejecutado_subitem += monto
+            subitem.monto_ejecutado_subitem = Decimal(str(subitem.monto_ejecutado_subitem)) + monto_decimal
             subitem.save()
             
             # Se actualiza el ítem padre
             item = subitem.item_presupuesto
-            item.monto_ejecutado_item += monto
+            item.monto_ejecutado_item = Decimal(str(item.monto_ejecutado_item)) + monto_decimal
             item.save()
         elif transaccion.item_presupuestario:
             # Se actualiza sólo el ítem
             item = transaccion.item_presupuestario
-            item.monto_ejecutado_item += monto
+            item.monto_ejecutado_item = Decimal(str(item.monto_ejecutado_item)) + monto_decimal
             item.save()
         
         # Se actualiza el monto ejecutado del proyecto
         proyecto = transaccion.proyecto
         if transaccion.tipo_transaccion == 'egreso':
-            proyecto.monto_ejecutado_proyecto += monto
+            proyecto.monto_ejecutado_proyecto = Decimal(str(proyecto.monto_ejecutado_proyecto)) + monto_decimal
         else:  # Si es ingreso
-            proyecto.presupuesto_total += monto
+            proyecto.presupuesto_total = Decimal(str(proyecto.presupuesto_total)) + monto_decimal
         proyecto.save()
     
     @staticmethod
@@ -247,14 +251,18 @@ class BudgetService:
         """
         items = Item_Presupuestario.objects.filter(proyecto=proyecto)
         
-        total_asignado = sum(item.monto_asignado_item for item in items)
-        total_ejecutado = sum(item.monto_ejecutado_item for item in items)
-        porcentaje_ejecutado = (total_ejecutado / total_asignado * 100) if total_asignado > 0 else 0
+        from decimal import Decimal
+        total_asignado = sum(Decimal(str(item.monto_asignado_item)) for item in items)
+        total_ejecutado = sum(Decimal(str(item.monto_ejecutado_item)) for item in items)
+        porcentaje_ejecutado = float((total_ejecutado / total_asignado * 100)) if total_asignado > 0 else 0
+        
+        presupuesto_total = Decimal(str(proyecto.presupuesto_total))
+        monto_ejecutado = Decimal(str(proyecto.monto_ejecutado_proyecto))
         
         return {
-            'presupuesto_total': float(proyecto.presupuesto_total),
-            'monto_ejecutado': float(proyecto.monto_ejecutado_proyecto),
-            'monto_disponible': float(proyecto.presupuesto_total - proyecto.monto_ejecutado_proyecto),
+            'presupuesto_total': float(presupuesto_total),
+            'monto_ejecutado': float(monto_ejecutado),
+            'monto_disponible': float(presupuesto_total - monto_ejecutado),
             'porcentaje_ejecutado': round(porcentaje_ejecutado, 2),
             'total_items': items.count(),
             'items_con_saldo': items.filter(

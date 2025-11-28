@@ -245,7 +245,10 @@ class BudgetServiceTest(TestCase):
         self.assertEqual(metricas['presupuesto_total'], 1000000.0)
         self.assertEqual(metricas['monto_ejecutado'], 200000.0)
         self.assertEqual(metricas['monto_disponible'], 800000.0)
-        self.assertEqual(metricas['porcentaje_ejecutado'], 20.0)
+        # El porcentaje se calcula sobre el total de items asignados, no del presupuesto total del proyecto
+        # Si solo hay un item con 500000 asignado y 200000 ejecutado, el porcentaje es 40%
+        # (200000 / 500000 * 100 = 40%)
+        self.assertEqual(metricas['porcentaje_ejecutado'], 40.0)
 
 
 class RenditionServiceTest(TestCase):
@@ -285,7 +288,25 @@ class RenditionServiceTest(TestCase):
     
     def test_cerrar_rendicion_proyecto_incompleto(self):
         """Test: No se puede cerrar rendición si hay errores de validación."""
-        # Proyecto con transacciones pendientes debería fallar
+        # Proyecto sin transacciones aprobadas o con transacciones sin evidencias debería fallar
+        # Crear una transacción pendiente sin evidencia
+        proveedor = Proveedor.objects.create(
+            nombre_proveedor='Proveedor Test',
+            rut_proveedor='98765432-1'
+        )
+        transaccion = Transaccion.objects.create(
+            proyecto=self.proyecto,
+            proveedor=proveedor,
+            usuario=self.usuario,
+            monto_transaccion=Decimal('100000.00'),
+            tipo_transaccion='egreso',
+            estado_transaccion=ESTADO_PENDIENTE,
+            tipo_doc_transaccion='factura',
+            nro_documento='DOC-001',
+            fecha_registro=timezone.now().date()
+        )
+        
+        # Intentar cerrar rendición debería fallar porque hay transacciones pendientes
         with self.assertRaises(RendicionIncompletaException):
             RenditionService.cerrar_rendicion(self.proyecto, self.usuario)
 

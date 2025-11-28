@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from decimal import Decimal
 import secrets
 
 
@@ -62,7 +63,7 @@ class Proyecto(models.Model):
     fecha_inicio_proyecto = models.DateField()
     fecha_fin_proyecto = models.DateField()
     presupuesto_total = models.DecimalField(max_digits=12, decimal_places=2)
-    monto_ejecutado_proyecto = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    monto_ejecutado_proyecto = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
 
     # --- Uso de las 'choices' ---
     estado_proyecto = models.CharField(
@@ -183,9 +184,12 @@ class InvitacionUsuario(models.Model):
         return f"Invitación para {self.email} - {self.organizacion.nombre_organizacion}"
     
     def save(self, *args, **kwargs):
-        """Genera un token único si no existe."""
+        """Genera un token único si no existe y establece fecha_expiracion si no está definida."""
         if not self.token:
             self.token = secrets.token_urlsafe(32)
+        if not self.fecha_expiracion:
+            from datetime import timedelta
+            self.fecha_expiracion = timezone.now() + timedelta(days=7)
         super().save(*args, **kwargs)
     
     def esta_expirada(self):
@@ -481,7 +485,46 @@ ACCION_LOG_CHOICES = [
 ]
 
 class Log_transaccion(models.Model):
-    transaccion = models.ForeignKey(Transaccion, on_delete=models.CASCADE)
+    """
+    Modelo para registrar el historial de acciones sobre transacciones.
+    
+    Para mantener la trazabilidad incluso cuando se elimina una transacción,
+    el campo transaccion puede ser null (SET_NULL) en caso de eliminación.
+    Se guarda información adicional para identificar la transacción eliminada.
+    """
+    transaccion = models.ForeignKey(
+        Transaccion, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        help_text="Transacción relacionada (null si fue eliminada)"
+    )
+    # Campos para mantener información de transacciones eliminadas
+    transaccion_id_eliminada = models.IntegerField(
+        null=True, 
+        blank=True,
+        help_text="ID de la transacción eliminada (para auditoría)"
+    )
+    transaccion_nro_documento = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text="Número de documento de la transacción eliminada"
+    )
+    transaccion_monto = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Monto de la transacción eliminada"
+    )
+    proyecto = models.ForeignKey(
+        'Proyecto',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        help_text="Proyecto de la transacción (para mantener referencia)"
+    )
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE)
     fecha_hora_accion = models.DateTimeField(auto_now_add=True)
     accion_realizada = models.CharField(
@@ -502,7 +545,7 @@ class Item_Presupuestario(models.Model):
     proyecto = models.ForeignKey(Proyecto, on_delete=models.CASCADE, db_index=True)
     nombre_item_presupuesto = models.CharField(max_length=100)
     monto_asignado_item = models.DecimalField(max_digits=12, decimal_places=2)
-    monto_ejecutado_item = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    monto_ejecutado_item = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     
     # Categoría del ítem para validación (C006)
     categoria_item = models.CharField(
@@ -530,7 +573,10 @@ class Item_Presupuestario(models.Model):
             Decimal: Saldo disponible (monto_asignado - monto_ejecutado)
         """
         from decimal import Decimal
-        return self.monto_asignado_item - self.monto_ejecutado_item
+        # Asegurar que ambos sean Decimal
+        monto_asignado = Decimal(str(self.monto_asignado_item))
+        monto_ejecutado = Decimal(str(self.monto_ejecutado_item))
+        return monto_asignado - monto_ejecutado
     
     def tiene_saldo_suficiente(self, monto):
         """
@@ -551,9 +597,12 @@ class Item_Presupuestario(models.Model):
         Returns:
             float: Porcentaje ejecutado (0-100)
         """
-        if self.monto_asignado_item == 0:
+        from decimal import Decimal
+        monto_asignado = Decimal(str(self.monto_asignado_item))
+        monto_ejecutado = Decimal(str(self.monto_ejecutado_item))
+        if monto_asignado == 0:
             return 0.0
-        return float((self.monto_ejecutado_item / self.monto_asignado_item) * 100)
+        return float((monto_ejecutado / monto_asignado) * 100)
     
 class Subitem_Presupuestario(models.Model):
     """
@@ -561,10 +610,23 @@ class Subitem_Presupuestario(models.Model):
     
     Permite una estructura jerárquica de presupuesto más detallada.
     """
-    item_presupuesto = models.ForeignKey(Item_Presupuestario, on_delete=models.CASCADE, db_index=True)
+    item_presupuesto = models.ForeignKey(
+        Item_Presupuestario, 
+        on_delete=models.CASCADE, 
+        db_index=True,
+        related_name='subitems'
+    )
     nombre_subitem_presupuesto = models.CharField(max_length=100)
     monto_asignado_subitem = models.DecimalField(max_digits=12, decimal_places=2)
-    monto_ejecutado_subitem = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    monto_ejecutado_subitem = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    
+    # Categoría del subítem para validación (C006)
+    categoria_subitem = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Categoría del subítem para validar contra la categoría del gasto"
+    )
 
     class Meta:
         indexes = [

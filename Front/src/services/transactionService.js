@@ -63,11 +63,15 @@ export const updateTransaction = async (transactionId, transactionData) => {
 /**
  * Elimina una transacción.
  * 
+ * Solo disponible para administradores de proyecto.
+ * Si la transacción está aprobada, se revierten los montos ejecutados.
+ * 
  * @param {number} transactionId - ID de la transacción
- * @returns {Promise<void>}
+ * @returns {Promise<Object>} Retorna mensaje de confirmación
  */
 export const deleteTransaction = async (transactionId) => {
-  await api.delete(`/transacciones/${transactionId}/`);
+  const response = await api.delete(`/transacciones/${transactionId}/`);
+  return response.data;
 };
 
 /**

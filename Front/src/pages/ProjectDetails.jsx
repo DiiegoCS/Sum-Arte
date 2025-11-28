@@ -11,7 +11,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getProject, getProjectMetrics } from '../services/projectService';
-import { getTransactions, approveTransaction, rejectTransaction } from '../services/transactionService';
+import { getTransactions, approveTransaction, rejectTransaction, updateTransaction, deleteTransaction } from '../services/transactionService';
 import { getProjectEvidence, getTransactionEvidence } from '../services/evidenceService';
 import { getLogsPorProyecto, getLogs } from '../services/logService';
 import { getUsuarios } from '../services/userService';
@@ -125,6 +125,37 @@ const ProjectDetails = () => {
       cargarDatos(); // Recargar datos
     } catch (error) {
       toast.error(error.message || 'Error al rechazar la transacción');
+      console.error('Error:', error);
+    }
+  };
+
+  /**
+   * Maneja la edición de una transacción.
+   */
+  const handleEditar = (transaccionId) => {
+    // Navegar a la página de edición con el ID de la transacción
+    navigate(`/registrar-gasto/${transaccionId}`);
+  };
+
+  /**
+   * Maneja la eliminación de una transacción.
+   */
+  const handleEliminar = async (transaccionId) => {
+    const confirmacion = window.confirm(
+      '¿Está seguro de que desea eliminar esta transacción? ' +
+      'Si la transacción está aprobada, se revertirán los montos ejecutados del presupuesto.'
+    );
+    
+    if (!confirmacion) {
+      return; // Usuario canceló
+    }
+
+    try {
+      await deleteTransaction(transaccionId);
+      toast.success('Transacción eliminada exitosamente');
+      cargarDatos(); // Recargar datos
+    } catch (error) {
+      toast.error(error.message || 'Error al eliminar la transacción');
       console.error('Error:', error);
     }
   };
@@ -483,29 +514,83 @@ const ProjectDetails = () => {
                             </button>
                           </td>
                           <td>
-                            {transaccion.estado_transaccion === 'pendiente' ? (
-                              // Mostrar botones si puede_aprobar es true, o si no está definido (mostrar siempre para pendientes)
-                              (transaccion.puede_aprobar !== false) ? (
-                                <div className="btn-group" role="group">
-                                  <button
-                                    className="btn btn-sm btn-success"
-                                    onClick={() => handleAprobar(transaccion.id)}
-                                  >
-                                    Aprobar
-                                  </button>
-                                  <button
-                                    className="btn btn-sm btn-danger"
-                                    onClick={() => handleRechazar(transaccion.id)}
-                                  >
-                                    Rechazar
-                                  </button>
-                                </div>
+                            <div className="btn-group" role="group">
+                              {transaccion.estado_transaccion === 'pendiente' ? (
+                                <>
+                                  {/* Botones de aprobar/rechazar - solo si puede_aprobar */}
+                                  {transaccion.puede_aprobar && (
+                                    <>
+                                      <button
+                                        className="btn btn-sm btn-success"
+                                        onClick={() => handleAprobar(transaccion.id)}
+                                        title="Aprobar transacción"
+                                      >
+                                        <i className="bi bi-check-circle me-1"></i>
+                                        Aprobar
+                                      </button>
+                                      <button
+                                        className="btn btn-sm btn-danger"
+                                        onClick={() => handleRechazar(transaccion.id)}
+                                        title="Rechazar transacción"
+                                      >
+                                        <i className="bi bi-x-circle me-1"></i>
+                                        Rechazar
+                                      </button>
+                                    </>
+                                  )}
+                                  {/* Botones de editar/eliminar - solo si puede_editar_eliminar */}
+                                  {transaccion.puede_editar_eliminar && (
+                                    <>
+                                      <button
+                                        className="btn btn-sm btn-warning"
+                                        onClick={() => handleEditar(transaccion.id)}
+                                        title="Editar transacción"
+                                      >
+                                        <i className="bi bi-pencil me-1"></i>
+                                        Editar
+                                      </button>
+                                      <button
+                                        className="btn btn-sm btn-outline-danger"
+                                        onClick={() => handleEliminar(transaccion.id)}
+                                        title="Eliminar transacción"
+                                      >
+                                        <i className="bi bi-trash me-1"></i>
+                                        Eliminar
+                                      </button>
+                                    </>
+                                  )}
+                                  {/* Si no tiene ningún permiso */}
+                                  {!transaccion.puede_aprobar && !transaccion.puede_editar_eliminar && (
+                                    <span className="text-muted small">Sin permisos</span>
+                                  )}
+                                </>
                               ) : (
-                                <span className="text-muted small">Sin permisos</span>
-                              )
-                            ) : (
-                              <span className="text-muted">-</span>
-                            )}
+                                // Para transacciones aprobadas o rechazadas, solo mostrar editar/eliminar si es admin
+                                transaccion.puede_editar_eliminar ? (
+                                  <>
+                                    <button
+                                      className="btn btn-sm btn-warning"
+                                      onClick={() => handleEditar(transaccion.id)}
+                                      disabled={!transaccion.puede_editar}
+                                      title={!transaccion.puede_editar ? 'Solo se pueden editar transacciones pendientes' : 'Editar transacción'}
+                                    >
+                                      <i className="bi bi-pencil me-1"></i>
+                                      Editar
+                                    </button>
+                                    <button
+                                      className="btn btn-sm btn-outline-danger"
+                                      onClick={() => handleEliminar(transaccion.id)}
+                                      title="Eliminar transacción"
+                                    >
+                                      <i className="bi bi-trash me-1"></i>
+                                      Eliminar
+                                    </button>
+                                  </>
+                                ) : (
+                                  <span className="text-muted">-</span>
+                                )
+                              )}
+                            </div>
                           </td>
                         </tr>
                         {mostrar && evidenciasTrans.length > 0 && (

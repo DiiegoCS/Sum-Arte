@@ -108,15 +108,15 @@ def log_transaccion_eliminacion(sender, instance, **kwargs):
     
     Nota: En Sum-Arte, las transacciones generalmente no se eliminan,
     pero se registra por si acaso.
-    """
-    usuario = getattr(instance, '_usuario_accion', None) or instance.usuario
     
-    if usuario:
-        Log_transaccion.objects.create(
-            transaccion=instance,
-            usuario=usuario,
-            accion_realizada=ACCION_LOG_DELETE
-        )
+    IMPORTANTE: Este signal se ejecuta después de que la transacción se elimina,
+    por lo que no podemos crear un Log_transaccion con una foreign key a la transacción
+    eliminada. En su lugar, el log de eliminación debe crearse ANTES de eliminar
+    la transacción, en el método destroy del ViewSet.
+    """
+    # No crear log aquí porque la transacción ya fue eliminada
+    # El log de eliminación debe crearse en el ViewSet antes de eliminar
+    pass
 
 
 @receiver(post_save, sender=Evidencia)

@@ -6,9 +6,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getProjects, getBudgetItems, getSubitems } from '../services/projectService';
-import { createTransaction } from '../services/transactionService';
+import { createTransaction, getTransaction, updateTransaction } from '../services/transactionService';
 import { uploadEvidence, linkEvidenceToTransaction } from '../services/evidenceService';
 import { createProvider, getProviders } from '../services/providerService';
 import { toast, ToastContainer } from 'react-toastify';
@@ -19,6 +19,8 @@ import 'react-toastify/dist/ReactToastify.css';
  */
 const RegisterExpense = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const transaccionIdEditar = searchParams.get('editar');
 
   // Estado del formulario
   const [proyectos, setProyectos] = useState([]);
@@ -26,6 +28,8 @@ const RegisterExpense = () => {
   const [itemsPresupuestarios, setItemsPresupuestarios] = useState([]);
   const [subitemsPresupuestarios, setSubitemsPresupuestarios] = useState([]);
   const [proveedores, setProveedores] = useState([]);
+  const [modoEdicion, setModoEdicion] = useState(false);
+  const [cargandoTransaccion, setCargandoTransaccion] = useState(false);
 
   const [formData, setFormData] = useState({
     proyecto: '',
@@ -52,7 +56,12 @@ const RegisterExpense = () => {
 
   useEffect(() => {
     cargarDatosIniciales();
-  }, []);
+    
+    // Si hay un ID de transacción en la URL, cargar los datos para edición
+    if (transaccionIdEditar) {
+      cargarTransaccionParaEditar(transaccionIdEditar);
+    }
+  }, [transaccionIdEditar]);
 
   useEffect(() => {
     if (formData.proyecto) {
@@ -240,10 +249,19 @@ const RegisterExpense = () => {
         datosTransaccion.subitem_presupuestario = parseInt(formData.subitem_presupuestario);
       }
 
-      // Se crea la transacción
-      const transaccion = await createTransaction(datosTransaccion);
+      // Se crea o actualiza la transacción según el modo
+      let transaccion;
+      if (modoEdicion && transaccionIdEditar) {
+        // Modo edición
+        transaccion = await updateTransaction(parseInt(transaccionIdEditar), datosTransaccion);
+        toast.success('Transacción actualizada exitosamente');
+      } else {
+        // Modo creación
+        transaccion = await createTransaction(datosTransaccion);
+        toast.success('El gasto se registró exitosamente');
+      }
 
-      // Se adjuntan y vinculan las evidencias
+      // Se adjuntan y vinculan las evidencias (solo en modo creación o si hay nuevas evidencias)
       if (evidencias.length > 0 && transaccion.id) {
         for (const evidencia of evidencias) {
           try {
@@ -260,8 +278,12 @@ const RegisterExpense = () => {
         }
       }
 
-      toast.success('El gasto se registró exitosamente');
-      navigate('/');
+      // Redirigir según el modo
+      if (modoEdicion) {
+        navigate(`/proyecto/${formData.proyecto}`);
+      } else {
+        navigate('/');
+      }
     } catch (error) {
       // Mejorar el mensaje de error mostrando detalles específicos
       let errorMessage = 'Ha ocurrido un error al registrar el gasto';
@@ -297,15 +319,29 @@ const RegisterExpense = () => {
     }
   };
 
+  if (cargandoTransaccion) {
+    return (
+      <div className="container mt-4">
+        <div className="d-flex justify-content-center">
+          <div className="spinner-border" role="status">
+            <span className="visually-hidden">Cargando transacción...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mt-4">
       <ToastContainer position="top-right" autoClose={3000} />
 
       <div className="row justify-content-center">
-        <div className="col-md-10">
+        <div className="col-md-10 col-lg-12">
           <div className="card shadow-sm">
             <div className="card-body">
-              <h1 className="card-title text-center mb-4">Registrar nuevo gasto</h1>
+              <h1 className="card-title text-center mb-4">
+                {modoEdicion ? 'Editar transacción' : 'Registrar nuevo gasto'}
+              </h1>
 
               <form onSubmit={handleSubmit}>
                 {/* Selección de proyecto */}
@@ -320,6 +356,7 @@ const RegisterExpense = () => {
                     value={formData.proyecto}
                     onChange={handleChange}
                     required
+                    disabled={modoEdicion}
                   >
                     <option value="">Seleccione un proyecto...</option>
                     {Array.isArray(proyectos) && proyectos.map(proyecto => (
@@ -613,16 +650,26 @@ const RegisterExpense = () => {
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    onClick={() => navigate('/')}
+                    onClick={() => {
+                      if (modoEdicion && formData.proyecto) {
+                        navigate(`/proyecto/${formData.proyecto}`);
+                      } else {
+                        navigate('/');
+                      }
+                    }}
+                    disabled={loading || cargandoTransaccion}
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     className="btn btn-primary"
-                    disabled={loading}
+                    disabled={loading || cargandoTransaccion}
                   >
-                    {loading ? 'Guardando...' : 'Guardar gasto'}
+                    {loading 
+                      ? (modoEdicion ? 'Actualizando...' : 'Guardando...') 
+                      : (modoEdicion ? 'Actualizar transacción' : 'Guardar gasto')
+                    }
                   </button>
                 </div>
               </form>
