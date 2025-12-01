@@ -6,10 +6,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getProjects, getBudgetItems, getSubitems } from '../services/projectService';
-import { createTransaction } from '../services/transactionService';
-import { uploadEvidence, linkEvidenceToTransaction } from '../services/evidenceService';
+import { createTransaction, getTransaction, updateTransaction } from '../services/transactionService';
+import { uploadEvidence, linkEvidenceToTransaction, processDocumentOCR } from '../services/evidenceService';
 import { createProvider, getProviders } from '../services/providerService';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -19,6 +19,8 @@ import 'react-toastify/dist/ReactToastify.css';
  */
 const RegisterExpense = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const transaccionIdEditar = searchParams.get('editar');
 
   // Estado del formulario
   const [proyectos, setProyectos] = useState([]);
@@ -26,6 +28,8 @@ const RegisterExpense = () => {
   const [itemsPresupuestarios, setItemsPresupuestarios] = useState([]);
   const [subitemsPresupuestarios, setSubitemsPresupuestarios] = useState([]);
   const [proveedores, setProveedores] = useState([]);
+  const [modoEdicion, setModoEdicion] = useState(false);
+  const [cargandoTransaccion, setCargandoTransaccion] = useState(false);
 
   const [formData, setFormData] = useState({
     proyecto: '',
@@ -49,10 +53,17 @@ const RegisterExpense = () => {
   const [loading, setLoading] = useState(false);
   const [crearNuevoProveedor, setCrearNuevoProveedor] = useState(false);
   const [errors, setErrors] = useState({});
+  const [procesandoOCR, setProcesandoOCR] = useState(false);
+  const [documentoPreview, setDocumentoPreview] = useState(null);
 
   useEffect(() => {
     cargarDatosIniciales();
-  }, []);
+    
+    // Si hay un ID de transacción en la URL, cargar los datos para edición
+    if (transaccionIdEditar) {
+      cargarTransaccionParaEditar(transaccionIdEditar);
+    }
+  }, [transaccionIdEditar]);
 
   useEffect(() => {
     if (formData.proyecto) {
@@ -143,6 +154,105 @@ const RegisterExpense = () => {
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
     setEvidencias(files);
+    
+    // Si hay un archivo de imagen o PDF, mostrar preview
+    if (files.length > 0) {
+      const firstFile = files[0];
+      if (firstFile.type.startsWith('image/') || firstFile.type === 'application/pdf') {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setDocumentoPreview(e.target.result);
+        };
+        reader.readAsDataURL(firstFile);
+      }
+    }
+  };
+
+  /**
+   * Procesa un documento usando OCR para extraer información automáticamente.
+   */
+  const handleProcessOCR = async () => {
+    if (evidencias.length === 0) {
+      toast.error('Por favor, seleccione un documento primero');
+      return;
+    }
+
+    // Usar el primer archivo para OCR
+    const archivo = evidencias[0];
+    
+    // Validar tipo de archivo
+    const tiposPermitidos = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+    if (!tiposPermitidos.includes(archivo.type)) {
+      toast.error('El OCR solo funciona con imágenes (JPG, PNG) o PDFs');
+      return;
+    }
+
+    setProcesandoOCR(true);
+    try {
+      toast.info('Procesando documento con OCR...');
+      const resultado = await processDocumentOCR(archivo);
+      
+      // Completar el formulario con los datos extraídos
+      if (resultado.proveedor?.nombre) {
+        // Buscar si el proveedor ya existe
+        const proveedorExistente = proveedores.find(
+          p => p.nombre_proveedor.toLowerCase() === resultado.proveedor.nombre.toLowerCase()
+        );
+        
+        if (proveedorExistente) {
+          setFormData(prev => ({ ...prev, proveedor: proveedorExistente.id.toString() }));
+        } else {
+          // Si no existe, preparar para crear nuevo proveedor
+          setCrearNuevoProveedor(true);
+          setFormData(prev => ({
+            ...prev,
+            nuevo_proveedor_nombre: resultado.proveedor.nombre || '',
+            nuevo_proveedor_rut: resultado.proveedor.rut || '',
+            nuevo_proveedor_email: resultado.proveedor.email || ''
+          }));
+        }
+      }
+
+      // Completar información del documento
+      if (resultado.documento?.numero) {
+        setFormData(prev => ({ ...prev, nro_documento: resultado.documento.numero }));
+      }
+      
+      if (resultado.documento?.tipo) {
+        setFormData(prev => ({ ...prev, tipo_doc_transaccion: resultado.documento.tipo }));
+      }
+      
+      if (resultado.documento?.fecha) {
+        setFormData(prev => ({ ...prev, fecha_registro: resultado.documento.fecha }));
+      }
+
+      // Completar monto
+      if (resultado.monto?.total) {
+        setFormData(prev => ({ ...prev, monto_transaccion: resultado.monto.total.toString() }));
+      }
+
+      // Completar información bancaria
+      if (resultado.banco?.cuenta) {
+        setFormData(prev => ({ ...prev, numero_cuenta_bancaria: resultado.banco.cuenta }));
+      }
+      
+      if (resultado.banco?.operacion) {
+        setFormData(prev => ({ ...prev, numero_operacion_bancaria: resultado.banco.operacion }));
+      }
+
+      const confianza = resultado.confianza || 0;
+      if (confianza >= 0.7) {
+        toast.success(`Documento procesado exitosamente (confianza: ${(confianza * 100).toFixed(0)}%)`);
+      } else {
+        toast.warning(`Documento procesado con baja confianza (${(confianza * 100).toFixed(0)}%). Por favor, revise los datos extraídos.`);
+      }
+      
+    } catch (error) {
+      console.error('Error al procesar OCR:', error);
+      toast.error(error.response?.data?.error || 'Error al procesar el documento con OCR');
+    } finally {
+      setProcesandoOCR(false);
+    }
   };
 
   /**
@@ -240,10 +350,19 @@ const RegisterExpense = () => {
         datosTransaccion.subitem_presupuestario = parseInt(formData.subitem_presupuestario);
       }
 
-      // Se crea la transacción
-      const transaccion = await createTransaction(datosTransaccion);
+      // Se crea o actualiza la transacción según el modo
+      let transaccion;
+      if (modoEdicion && transaccionIdEditar) {
+        // Modo edición
+        transaccion = await updateTransaction(parseInt(transaccionIdEditar), datosTransaccion);
+        toast.success('Transacción actualizada exitosamente');
+      } else {
+        // Modo creación
+        transaccion = await createTransaction(datosTransaccion);
+        toast.success('El gasto se registró exitosamente');
+      }
 
-      // Se adjuntan y vinculan las evidencias
+      // Se adjuntan y vinculan las evidencias (solo en modo creación o si hay nuevas evidencias)
       if (evidencias.length > 0 && transaccion.id) {
         for (const evidencia of evidencias) {
           try {
@@ -260,8 +379,12 @@ const RegisterExpense = () => {
         }
       }
 
-      toast.success('El gasto se registró exitosamente');
-      navigate('/');
+      // Redirigir según el modo
+      if (modoEdicion) {
+        navigate(`/proyecto/${formData.proyecto}`);
+      } else {
+        navigate('/');
+      }
     } catch (error) {
       // Mejorar el mensaje de error mostrando detalles específicos
       let errorMessage = 'Ha ocurrido un error al registrar el gasto';
@@ -297,15 +420,29 @@ const RegisterExpense = () => {
     }
   };
 
+  if (cargandoTransaccion) {
+    return (
+      <div className="container mt-4">
+        <div className="d-flex justify-content-center">
+          <div className="spinner-border" role="status">
+            <span className="visually-hidden">Cargando transacción...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mt-4">
       <ToastContainer position="top-right" autoClose={3000} />
 
       <div className="row justify-content-center">
-        <div className="col-md-10">
+        <div className="col-md-10 col-lg-12">
           <div className="card shadow-sm">
             <div className="card-body">
-              <h1 className="card-title text-center mb-4">Registrar nuevo gasto</h1>
+              <h1 className="card-title text-center mb-4">
+                {modoEdicion ? 'Editar transacción' : 'Registrar nuevo gasto'}
+              </h1>
 
               <form onSubmit={handleSubmit}>
                 {/* Selección de proyecto */}
@@ -320,6 +457,7 @@ const RegisterExpense = () => {
                     value={formData.proyecto}
                     onChange={handleChange}
                     required
+                    disabled={modoEdicion}
                   >
                     <option value="">Seleccione un proyecto...</option>
                     {Array.isArray(proyectos) && proyectos.map(proyecto => (
@@ -581,27 +719,83 @@ const RegisterExpense = () => {
                   <label htmlFor="evidencias" className="form-label">
                     Documentos de respaldo <span className="text-danger">*</span>
                   </label>
-                  <input
-                    type="file"
-                    className={`form-control ${errors.evidencias ? 'is-invalid' : ''}`}
-                    id="evidencias"
-                    multiple
-                    onChange={handleFileChange}
-                    accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.doc,.docx"
-                    required
-                  />
+                  <div className="input-group">
+                    <input
+                      type="file"
+                      className={`form-control ${errors.evidencias ? 'is-invalid' : ''}`}
+                      id="evidencias"
+                      multiple
+                      onChange={handleFileChange}
+                      accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.doc,.docx"
+                      required
+                      disabled={procesandoOCR}
+                    />
+                    {evidencias.length > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-outline-primary"
+                        onClick={handleProcessOCR}
+                        disabled={procesandoOCR || !evidencias[0]?.type?.match(/^(image\/(jpeg|jpg|png)|application\/pdf)$/)}
+                        title="Leer información del documento automáticamente con OCR"
+                      >
+                        {procesandoOCR ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                            Procesando...
+                          </>
+                        ) : (
+                          <>
+                            <i className="bi bi-eye me-2"></i>
+                            Leer con OCR
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
                   {errors.evidencias && (
                     <div className="invalid-feedback">{errors.evidencias}</div>
                   )}
                   <small className="form-text text-muted">
                     Formatos permitidos: PDF, imágenes, Excel, Word. Máximo 10MB por archivo.
+                    <br />
+                    <strong>💡 Tip:</strong> Suba una factura o boleta y use "Leer con OCR" para completar el formulario automáticamente.
                   </small>
+                  
+                  {/* Preview del documento */}
+                  {documentoPreview && (
+                    <div className="mt-3">
+                      <strong>Vista previa:</strong>
+                      <div className="mt-2 border rounded p-2" style={{ maxHeight: '300px', overflow: 'auto' }}>
+                        {documentoPreview.startsWith('data:image/') ? (
+                          <img 
+                            src={documentoPreview} 
+                            alt="Preview" 
+                            className="img-fluid" 
+                            style={{ maxHeight: '250px' }}
+                          />
+                        ) : (
+                          <iframe 
+                            src={documentoPreview} 
+                            className="w-100" 
+                            style={{ height: '250px' }}
+                            title="Preview PDF"
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
                   {evidencias.length > 0 && (
                     <div className="mt-2">
                       <strong>Archivos seleccionados:</strong>
                       <ul className="list-unstyled">
                         {evidencias.map((file, index) => (
-                          <li key={index}>{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</li>
+                          <li key={index}>
+                            {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                            {file.type.match(/^(image\/(jpeg|jpg|png)|application\/pdf)$/) && (
+                              <span className="badge bg-info ms-2">OCR disponible</span>
+                            )}
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -613,16 +807,26 @@ const RegisterExpense = () => {
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    onClick={() => navigate('/')}
+                    onClick={() => {
+                      if (modoEdicion && formData.proyecto) {
+                        navigate(`/proyecto/${formData.proyecto}`);
+                      } else {
+                        navigate('/');
+                      }
+                    }}
+                    disabled={loading || cargandoTransaccion}
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     className="btn btn-primary"
-                    disabled={loading}
+                    disabled={loading || cargandoTransaccion}
                   >
-                    {loading ? 'Guardando...' : 'Guardar gasto'}
+                    {loading 
+                      ? (modoEdicion ? 'Actualizando...' : 'Guardando...') 
+                      : (modoEdicion ? 'Actualizar transacción' : 'Guardar gasto')
+                    }
                   </button>
                 </div>
               </form>

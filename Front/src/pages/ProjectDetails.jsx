@@ -11,8 +11,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getProject, getProjectMetrics } from '../services/projectService';
-import { getTransactions, approveTransaction, rejectTransaction } from '../services/transactionService';
+import { getTransactions, approveTransaction, rejectTransaction, updateTransaction, deleteTransaction } from '../services/transactionService';
 import { getProjectEvidence, getTransactionEvidence } from '../services/evidenceService';
+import { getLogsPorProyecto, getLogs } from '../services/logService';
+import { getUsuarios } from '../services/userService';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -30,6 +32,16 @@ const ProjectDetails = () => {
   const [loading, setLoading] = useState(true);
   const [transaccionesConEvidencias, setTransaccionesConEvidencias] = useState({});
   const [mostrarEvidencias, setMostrarEvidencias] = useState({});
+  const [logs, setLogs] = useState([]);
+  const [logsOriginales, setLogsOriginales] = useState([]); // Logs sin filtrar
+  const [mostrarHistorial, setMostrarHistorial] = useState(false);
+  const [cargandoLogs, setCargandoLogs] = useState(false);
+  const [usuarios, setUsuarios] = useState([]);
+  const [filtrosHistorial, setFiltrosHistorial] = useState({
+    usuario: '',
+    accion_realizada: '',
+    ordenFecha: 'desc', // 'asc' o 'desc'
+  });
 
   useEffect(() => {
     cargarDatos();
@@ -118,6 +130,37 @@ const ProjectDetails = () => {
   };
 
   /**
+   * Maneja la edición de una transacción.
+   */
+  const handleEditar = (transaccionId) => {
+    // Navegar a la página de edición con el ID de la transacción
+    navigate(`/registrar-gasto/${transaccionId}`);
+  };
+
+  /**
+   * Maneja la eliminación de una transacción.
+   */
+  const handleEliminar = async (transaccionId) => {
+    const confirmacion = window.confirm(
+      '¿Está seguro de que desea eliminar esta transacción? ' +
+      'Si la transacción está aprobada, se revertirán los montos ejecutados del presupuesto.'
+    );
+    
+    if (!confirmacion) {
+      return; // Usuario canceló
+    }
+
+    try {
+      await deleteTransaction(transaccionId);
+      toast.success('Transacción eliminada exitosamente');
+      cargarDatos(); // Recargar datos
+    } catch (error) {
+      toast.error(error.message || 'Error al eliminar la transacción');
+      console.error('Error:', error);
+    }
+  };
+
+  /**
    * Alterna la visualización de evidencias para una transacción.
    */
   const toggleEvidencias = (transaccionId) => {
@@ -125,6 +168,132 @@ const ProjectDetails = () => {
       ...prev,
       [transaccionId]: !prev[transaccionId]
     }));
+  };
+
+  /**
+   * Carga el historial de logs del proyecto.
+   */
+  const cargarHistorial = async () => {
+    if (mostrarHistorial && logsOriginales.length > 0) {
+      // Si ya está cargado y visible, solo ocultar
+      setMostrarHistorial(false);
+      return;
+    }
+
+    try {
+      setCargandoLogs(true);
+      
+      // Cargar logs y usuarios en paralelo
+      const [logsData, usuariosData] = await Promise.all([
+        getLogsPorProyecto(id),
+        getUsuarios()
+      ]);
+      
+      const logsList = Array.isArray(logsData) ? logsData : [];
+      setLogsOriginales(logsList);
+      
+      // Aplicar filtros iniciales
+      aplicarFiltros(logsList, filtrosHistorial);
+      
+      // Guardar usuarios para el filtro
+      setUsuarios(Array.isArray(usuariosData) ? usuariosData : []);
+      
+      setMostrarHistorial(true);
+    } catch (error) {
+      console.error('Error al cargar historial:', error);
+      toast.error('Error al cargar el historial de acciones');
+    } finally {
+      setCargandoLogs(false);
+    }
+  };
+
+  /**
+   * Aplica los filtros a los logs y actualiza el estado.
+   */
+  const aplicarFiltros = (logsAFiltrar, filtros) => {
+    let logsFiltrados = [...logsAFiltrar];
+
+    // Filtrar por usuario
+    if (filtros.usuario) {
+      logsFiltrados = logsFiltrados.filter(log => 
+        log.usuario === parseInt(filtros.usuario)
+      );
+    }
+
+    // Filtrar por tipo de acción
+    if (filtros.accion_realizada) {
+      logsFiltrados = logsFiltrados.filter(log => 
+        log.accion_realizada === filtros.accion_realizada
+      );
+    }
+
+    // Ordenar por fecha
+    logsFiltrados.sort((a, b) => {
+      const fechaA = new Date(a.fecha_hora_accion);
+      const fechaB = new Date(b.fecha_hora_accion);
+      
+      if (filtros.ordenFecha === 'asc') {
+        return fechaA - fechaB; // Más antiguos primero
+      } else {
+        return fechaB - fechaA; // Más recientes primero
+      }
+    });
+
+    setLogs(logsFiltrados);
+  };
+
+  /**
+   * Maneja el cambio de filtros.
+   */
+  const handleFiltroChange = (nombre, valor) => {
+    const nuevosFiltros = {
+      ...filtrosHistorial,
+      [nombre]: valor
+    };
+    setFiltrosHistorial(nuevosFiltros);
+    aplicarFiltros(logsOriginales, nuevosFiltros);
+  };
+
+  /**
+   * Limpia todos los filtros.
+   */
+  const limpiarFiltros = () => {
+    const filtrosLimpios = {
+      usuario: '',
+      accion_realizada: '',
+      ordenFecha: 'desc'
+    };
+    setFiltrosHistorial(filtrosLimpios);
+    aplicarFiltros(logsOriginales, filtrosLimpios);
+  };
+
+  /**
+   * Formatea la fecha para mostrar.
+   */
+  const formatearFecha = (fechaISO) => {
+    if (!fechaISO) return 'N/A';
+    const fecha = new Date(fechaISO);
+    return fecha.toLocaleString('es-CL', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  /**
+   * Obtiene el badge de color para una acción.
+   */
+  const getAccionBadgeClass = (accion) => {
+    const clases = {
+      'creacion': 'bg-success',
+      'modificacion': 'bg-info',
+      'aprobacion': 'bg-primary',
+      'rechazo': 'bg-danger',
+      'eliminacion': 'bg-dark',
+    };
+    return clases[accion] || 'bg-secondary';
   };
 
   /**
@@ -165,11 +334,28 @@ const ProjectDetails = () => {
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h1>{proyecto.nombre_proyecto}</h1>
-          <p className="text-muted">Estado: {proyecto.estado_display || proyecto.estado_proyecto}</p>
+          <p className="text-muted">Estado: { proyecto.estado_display || proyecto.estado_proyecto}</p>
         </div>
         <div className="btn-group">
+        <div className="d-flex gap-2">
+          <button 
+            className="btn btn-primary" 
+            onClick={() => navigate(`/proyecto/${id}/editar`)}
+            title="Editar proyecto"
+          >
+            <i className="bi bi-pencil me-2"></i>
+            Editar Proyecto
+          </button>
           <button className="btn btn-secondary" onClick={() => navigate('/')}>
             Volver al Dashboard
+          </button>
+        </div>
+          {/* Botón para gestionar equipo */}
+          <button
+            className="btn btn-outline-primary"
+            onClick={() => navigate(`/proyecto/${id}/equipo`)}
+          >
+            Gestionar Equipo
           </button>
           {/* Botón para pre-rendición (solo si el proyecto no está cerrado) */}
           {proyecto.estado_proyecto !== 'completado' && proyecto.estado_proyecto !== 'cerrado' && (
@@ -328,29 +514,83 @@ const ProjectDetails = () => {
                             </button>
                           </td>
                           <td>
-                            {transaccion.estado_transaccion === 'pendiente' ? (
-                              // Mostrar botones si puede_aprobar es true, o si no está definido (mostrar siempre para pendientes)
-                              (transaccion.puede_aprobar !== false) ? (
-                                <div className="btn-group" role="group">
-                                  <button
-                                    className="btn btn-sm btn-success"
-                                    onClick={() => handleAprobar(transaccion.id)}
-                                  >
-                                    Aprobar
-                                  </button>
-                                  <button
-                                    className="btn btn-sm btn-danger"
-                                    onClick={() => handleRechazar(transaccion.id)}
-                                  >
-                                    Rechazar
-                                  </button>
-                                </div>
+                            <div className="btn-group" role="group">
+                              {transaccion.estado_transaccion === 'pendiente' ? (
+                                <>
+                                  {/* Botones de aprobar/rechazar - solo si puede_aprobar */}
+                                  {transaccion.puede_aprobar && (
+                                    <>
+                                      <button
+                                        className="btn btn-sm btn-success"
+                                        onClick={() => handleAprobar(transaccion.id)}
+                                        title="Aprobar transacción"
+                                      >
+                                        <i className="bi bi-check-circle me-1"></i>
+                                        Aprobar
+                                      </button>
+                                      <button
+                                        className="btn btn-sm btn-danger"
+                                        onClick={() => handleRechazar(transaccion.id)}
+                                        title="Rechazar transacción"
+                                      >
+                                        <i className="bi bi-x-circle me-1"></i>
+                                        Rechazar
+                                      </button>
+                                    </>
+                                  )}
+                                  {/* Botones de editar/eliminar - solo si puede_editar_eliminar */}
+                                  {transaccion.puede_editar_eliminar && (
+                                    <>
+                                      <button
+                                        className="btn btn-sm btn-warning"
+                                        onClick={() => handleEditar(transaccion.id)}
+                                        title="Editar transacción"
+                                      >
+                                        <i className="bi bi-pencil me-1"></i>
+                                        Editar
+                                      </button>
+                                      <button
+                                        className="btn btn-sm btn-outline-danger"
+                                        onClick={() => handleEliminar(transaccion.id)}
+                                        title="Eliminar transacción"
+                                      >
+                                        <i className="bi bi-trash me-1"></i>
+                                        Eliminar
+                                      </button>
+                                    </>
+                                  )}
+                                  {/* Si no tiene ningún permiso */}
+                                  {!transaccion.puede_aprobar && !transaccion.puede_editar_eliminar && (
+                                    <span className="text-muted small">Sin permisos</span>
+                                  )}
+                                </>
                               ) : (
-                                <span className="text-muted small">Sin permisos</span>
-                              )
-                            ) : (
-                              <span className="text-muted">-</span>
-                            )}
+                                // Para transacciones aprobadas o rechazadas, solo mostrar editar/eliminar si es admin
+                                transaccion.puede_editar_eliminar ? (
+                                  <>
+                                    <button
+                                      className="btn btn-sm btn-warning"
+                                      onClick={() => handleEditar(transaccion.id)}
+                                      disabled={!transaccion.puede_editar}
+                                      title={!transaccion.puede_editar ? 'Solo se pueden editar transacciones pendientes' : 'Editar transacción'}
+                                    >
+                                      <i className="bi bi-pencil me-1"></i>
+                                      Editar
+                                    </button>
+                                    <button
+                                      className="btn btn-sm btn-outline-danger"
+                                      onClick={() => handleEliminar(transaccion.id)}
+                                      title="Eliminar transacción"
+                                    >
+                                      <i className="bi bi-trash me-1"></i>
+                                      Eliminar
+                                    </button>
+                                  </>
+                                ) : (
+                                  <span className="text-muted">-</span>
+                                )
+                              )}
+                            </div>
                           </td>
                         </tr>
                         {mostrar && evidenciasTrans.length > 0 && (
@@ -388,6 +628,175 @@ const ProjectDetails = () => {
               </table>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Sección de Historial de Acciones */}
+      <div className="row mt-4">
+        <div className="col-12">
+          <div className="card shadow">
+            <div className="card-header d-flex justify-content-between align-items-center">
+              <h5 className="mb-0">Historial de Acciones (Auditoría)</h5>
+              <button
+                className="btn btn-sm btn-outline-primary"
+                onClick={cargarHistorial}
+                disabled={cargandoLogs}
+              >
+                {cargandoLogs ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                    Cargando...
+                  </>
+                ) : mostrarHistorial ? (
+                  'Ocultar Historial'
+                ) : (
+                  'Ver Historial'
+                )}
+              </button>
+            </div>
+            {mostrarHistorial && (
+              <div className="card-body">
+                {/* Filtros */}
+                <div className="row mb-3">
+                  <div className="col-md-3">
+                    <label htmlFor="filtro-usuario" className="form-label form-label-sm">
+                      <small>Filtrar por Usuario</small>
+                    </label>
+                    <select
+                      id="filtro-usuario"
+                      className="form-select form-select-sm"
+                      value={filtrosHistorial.usuario}
+                      onChange={(e) => handleFiltroChange('usuario', e.target.value)}
+                    >
+                      <option value="">Todos los usuarios</option>
+                      {usuarios.map(usuario => (
+                        <option key={usuario.id} value={usuario.id}>
+                          {usuario.first_name || usuario.last_name
+                            ? `${usuario.first_name || ''} ${usuario.last_name || ''}`.trim()
+                            : usuario.username}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-3">
+                    <label htmlFor="filtro-accion" className="form-label form-label-sm">
+                      <small>Filtrar por Acción</small>
+                    </label>
+                    <select
+                      id="filtro-accion"
+                      className="form-select form-select-sm"
+                      value={filtrosHistorial.accion_realizada}
+                      onChange={(e) => handleFiltroChange('accion_realizada', e.target.value)}
+                    >
+                      <option value="">Todas las acciones</option>
+                      <option value="creacion">Creación</option>
+                      <option value="modificacion">Modificación</option>
+                      <option value="aprobacion">Aprobación</option>
+                      <option value="rechazo">Rechazo</option>
+                      <option value="eliminacion">Eliminación</option>
+                    </select>
+                  </div>
+                  <div className="col-md-3">
+                    <label htmlFor="filtro-orden" className="form-label form-label-sm">
+                      <small>Ordenar por Fecha</small>
+                    </label>
+                    <select
+                      id="filtro-orden"
+                      className="form-select form-select-sm"
+                      value={filtrosHistorial.ordenFecha}
+                      onChange={(e) => handleFiltroChange('ordenFecha', e.target.value)}
+                    >
+                      <option value="desc">Más recientes primero</option>
+                      <option value="asc">Más antiguos primero</option>
+                    </select>
+                  </div>
+                  <div className="col-md-3 d-flex align-items-end">
+                    <button
+                      className="btn btn-sm btn-outline-secondary w-100"
+                      onClick={limpiarFiltros}
+                      disabled={!filtrosHistorial.usuario && !filtrosHistorial.accion_realizada && filtrosHistorial.ordenFecha === 'desc'}
+                    >
+                      Limpiar Filtros
+                    </button>
+                  </div>
+                </div>
+
+                {/* Información de resultados */}
+                <div className="mb-2">
+                  <small className="text-muted">
+                    Mostrando {logs.length} de {logsOriginales.length} registro(s)
+                    {(filtrosHistorial.usuario || filtrosHistorial.accion_realizada) && (
+                      <span className="ms-2">
+                        <span className="badge bg-info">
+                          Filtros activos
+                        </span>
+                      </span>
+                    )}
+                  </small>
+                </div>
+
+                {logs.length === 0 ? (
+                  <p className="text-muted text-center mb-0">
+                    {logsOriginales.length === 0
+                      ? 'No hay registros de acciones para este proyecto.'
+                      : 'No hay registros que coincidan con los filtros seleccionados.'}
+                  </p>
+                ) : (
+                  <div className="table-responsive">
+                    <table className="table table-sm table-hover">
+                      <thead>
+                        <tr>
+                          <th>
+                            Fecha y Hora
+                            {filtrosHistorial.ordenFecha === 'desc' ? ' ↓' : ' ↑'}
+                          </th>
+                          <th>Usuario</th>
+                          <th>Acción</th>
+                          <th>Transacción</th>
+                          <th>Monto</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {logs.map((log) => (
+                          <tr key={log.id}>
+                            <td>
+                              <small>{formatearFecha(log.fecha_hora_accion)}</small>
+                            </td>
+                            <td>
+                              {log.usuario_nombre_completo || log.usuario_nombre}
+                              <br />
+                              <small className="text-muted">@{log.usuario_nombre}</small>
+                            </td>
+                            <td>
+                              <span className={`badge ${getAccionBadgeClass(log.accion_realizada)} text-white`}>
+                                {log.accion_display || log.accion_realizada}
+                              </span>
+                            </td>
+                            <td>
+                              <small>
+                                Doc: {log.transaccion_nro_documento || 'N/A'}
+                                <br />
+                                {log.proyecto_nombre && (
+                                  <span className="text-muted">{log.proyecto_nombre}</span>
+                                )}
+                              </small>
+                            </td>
+                            <td>
+                              {log.transaccion_monto ? (
+                                <strong>${parseFloat(log.transaccion_monto).toLocaleString('es-CL')}</strong>
+                              ) : (
+                                <span className="text-muted">N/A</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

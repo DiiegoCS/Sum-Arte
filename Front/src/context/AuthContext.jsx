@@ -59,10 +59,29 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  /**
+   * Función para refrescar los datos del usuario actual.
+   * Útil después de crear una organización o actualizar el perfil.
+   */
+  const refreshUser = async () => {
+    try {
+      if (isAuthenticated()) {
+        const currentUser = getCurrentUser();
+        if (currentUser) {
+          setUser(currentUser);
+          return currentUser;
+        }
+      }
+    } catch (error) {
+      console.error('Error al refrescar usuario:', error);
+    }
+  };
+
   const value = {
     user,
     login,
     logout,
+    refreshUser,
     isAuthenticated: !!user,
     loading,
   };

@@ -9,6 +9,12 @@ import RegisterExpense from './pages/RegisterExpense';
 import PreRendicion from './pages/PreRendicion';
 import CerrarRendicion from './pages/CerrarRendicion';
 import Login from './pages/Login';
+import CreateOrganization from './pages/CreateOrganization';
+import InviteUser from './pages/InviteUser';
+import AcceptInvitation from './pages/AcceptInvitation';
+import ProjectTeam from './pages/ProjectTeam';
+import CreateEditProject from './pages/CreateEditProject';
+import UserProfile from './pages/UserProfile';
 
 function App() {
   return (
@@ -16,8 +22,77 @@ function App() {
       <BrowserRouter>
         <div className="App">
           <Routes>
-            {/* Ruta pública de inicio de sesión */}
+            {/* Rutas públicas */}
             <Route path="/login" element={<Login />} />
+            <Route path="/aceptar-invitacion" element={<AcceptInvitation />} />
+            
+            {/* Ruta para crear organización (requiere autenticación) */}
+            <Route
+              path="/crear-organizacion"
+              element={
+                <ProtectedRoute>
+                  <>
+                    <Navbar />
+                    <CreateOrganization />
+                  </>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/invitar-usuario"
+              element={
+                <ProtectedRoute>
+                  <>
+                    <Navbar />
+                    <InviteUser />
+                  </>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/proyecto/:id/equipo"
+              element={
+                <ProtectedRoute>
+                  <>
+                    <Navbar />
+                    <ProjectTeam />
+                  </>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/crear-proyecto"
+              element={
+                <ProtectedRoute>
+                  <>
+                    <Navbar />
+                    <CreateEditProject />
+                  </>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/proyecto/:id/editar"
+              element={
+                <ProtectedRoute>
+                  <>
+                    <Navbar />
+                    <CreateEditProject />
+                  </>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/mi-perfil"
+              element={
+                <ProtectedRoute>
+                  <>
+                    <Navbar />
+                    <UserProfile />
+                  </>
+                </ProtectedRoute>
+              }
+            />
             
             {/* La aplicación encapsula las rutas protegidas que requieren autenticación */}
             <Route
