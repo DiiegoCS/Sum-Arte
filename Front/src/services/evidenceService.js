@@ -117,4 +117,24 @@ export const restoreEvidence = async (evidenceId) => {
   return response.data;
 };
 
+/**
+ * Procesa un documento usando OCR con Google Gemini Vision API.
+ * 
+ * Extrae información estructurada de facturas, boletas, etc.
+ * 
+ * @param {File} file - Archivo de imagen o PDF a procesar
+ * @returns {Promise<Object>} Devuelve la información extraída del documento
+ */
+export const processDocumentOCR = async (file) => {
+  const formData = new FormData();
+  formData.append('archivo', file);
+
+  const response = await api.post('/evidencias/procesar-ocr/', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+};
+
 

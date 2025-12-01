@@ -1390,6 +1390,80 @@ class EvidenciaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
+    @action(detail=False, methods=['post'], url_path='procesar-ocr', permission_classes=[IsAuthenticated])
+    def procesar_ocr(self, request):
+        """
+        Procesa un documento usando OCR con Google Gemini Vision API.
+        
+        Extrae información estructurada de facturas, boletas, etc.
+        
+        Body (multipart/form-data):
+            - archivo: Archivo de imagen o PDF a procesar
+            
+        Returns:
+            JSON con la información extraída del documento
+        """
+        from rest_framework.response import Response
+        from rest_framework import status
+        from .ocr_service import OCRService
+        
+        if 'archivo' not in request.FILES:
+            return Response(
+                {'error': 'No se proporcionó ningún archivo.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        archivo = request.FILES['archivo']
+        
+        # Validar tipo de archivo
+        tipos_permitidos = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf']
+        if archivo.content_type not in tipos_permitidos:
+            return Response(
+                {'error': f'Tipo de archivo no permitido. Tipos permitidos: {", ".join(tipos_permitidos)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validar tamaño (máximo 10MB)
+        if archivo.size > 10 * 1024 * 1024:
+            return Response(
+                {'error': 'El archivo es demasiado grande. Tamaño máximo: 10MB'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Leer el contenido del archivo
+            archivo.seek(0)
+            image_data = archivo.read()
+            
+            # Procesar con OCR
+            ocr_service = OCRService()
+            resultado = ocr_service.process_document(
+                image_data=image_data,
+                mime_type=archivo.content_type
+            )
+            
+            return Response(resultado, status=status.HTTP_200_OK)
+            
+        except ValueError as e:
+            # Error de configuración (API key no configurada)
+            return Response(
+                {'error': f'Error de configuración: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except Exception as e:
+            # Log del error completo para debugging
+            import traceback
+            error_traceback = traceback.format_exc()
+            print(f"Error en procesar_ocr: {error_traceback}")  # Para ver en logs de Docker
+            
+            return Response(
+                {
+                    'error': f'Error al procesar el documento: {str(e)}',
+                    'detalle': str(e)  # Incluir detalles adicionales
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
     def destroy(self, request, *args, **kwargs):
         """
         Realiza eliminación lógica (soft delete) de la evidencia.
