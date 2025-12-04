@@ -200,67 +200,81 @@ const UserProfile = () => {
 
   if (loading) {
     return (
-      <div className="container mt-4">
-        <div className="d-flex justify-content-center">
-          <div className="spinner-border" role="status">
-            <span className="visually-hidden">Cargando...</span>
-          </div>
+      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Cargando...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mt-4">
+    <>
       <ToastContainer position="top-right" autoClose={3000} />
       
-      {/* Encabezado */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h1>Mi Perfil</h1>
-          <p className="text-muted">Gestiona tu información personal</p>
+      {/* Page Header estilo template */}
+      <div className="container">
+        <div className="d-flex justify-content-between align-items-center">
+          <div>
+            <h3 className="page-title">
+              <span className="page-title-icon bg-gradient-primary text-white me-2">
+                <i className="mdi mdi-account-circle"></i>
+              </span>
+              Mi Perfil
+            </h3>
+            <p className="text-muted mb-0">Gestiona tu información personal</p>
+          </div>
+          <button 
+            className="btn btn-gradient-secondary" 
+            onClick={() => navigate('/')}
+            disabled={saving}
+          >
+            <i className="mdi mdi-arrow-left me-2"></i>
+            Volver
+          </button>
         </div>
-        <button 
-          className="btn btn-secondary" 
-          onClick={() => navigate('/')}
-          disabled={saving}
-        >
-          Volver
-        </button>
       </div>
 
       {/* Información del sistema (solo lectura) */}
-      <div className="card mb-4">
-        <div className="card-header bg-light">
-          <h5 className="mb-0">Información del Sistema</h5>
-        </div>
-        <div className="card-body">
-          <div className="row">
-            <div className="col-md-6 mb-3">
-              <label className="form-label text-muted">Nombre de Usuario</label>
-              <p className="form-control-plaintext">{userData?.username}</p>
-            </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label text-muted">Organización</label>
-              <p className="form-control-plaintext">
-                {userData?.organizacion_nombre || 'Sin organización asignada'}
-              </p>
+      <div className="row mb-4">
+        <div className="col-12 grid-margin stretch-card">
+          <div className="card">
+            <div className="card-body">
+              <h4 className="card-title mb-4">
+                <i className="mdi mdi-information-outline me-2"></i>
+                Información del Sistema
+              </h4>
+              <div className="row">
+                <div className="col-md-6 mb-3">
+                  <label className="form-label text-muted">Nombre de Usuario</label>
+                  <p className="form-control-plaintext">{userData?.username}</p>
+                </div>
+                <div className="col-md-6 mb-3">
+                  <label className="form-label text-muted">Organización</label>
+                  <p className="form-control-plaintext">
+                    {userData?.organizacion_nombre || 'Sin organización asignada'}
+                  </p>
+                </div>
+              </div>
+              <small className="text-muted d-block mt-2">
+                <i className="mdi mdi-information-outline me-1"></i>
+                Esta información no puede ser modificada desde aquí. Contacta a un administrador si necesitas cambiarla.
+              </small>
             </div>
           </div>
-          <small className="text-muted">
-            <i className="bi bi-info-circle me-1"></i>
-            Esta información no puede ser modificada desde aquí. Contacta a un administrador si necesitas cambiarla.
-          </small>
         </div>
       </div>
 
       {/* Formulario de edición */}
-      <div className="card">
-        <div className="card-header">
-          <h5 className="mb-0">Información Personal</h5>
-        </div>
-        <div className="card-body">
-          <form onSubmit={handleSubmit}>
+      <div className="row">
+        <div className="col-12 grid-margin stretch-card">
+          <div className="card">
+            <div className="card-body">
+              <h4 className="card-title mb-4">
+                <i className="mdi mdi-account-edit me-2"></i>
+                Información Personal
+              </h4>
+              <form onSubmit={handleSubmit}>
             <div className="row">
               {/* Nombre */}
               <div className="col-md-6 mb-3">
@@ -376,15 +390,16 @@ const UserProfile = () => {
             <div className="d-flex justify-content-end gap-2 mt-4">
               <button
                 type="button"
-                className="btn btn-secondary"
+                className="btn btn-gradient-secondary"
                 onClick={() => navigate('/')}
                 disabled={saving}
               >
+                <i className="mdi mdi-close me-2"></i>
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="btn btn-primary"
+                className="btn btn-gradient-primary"
                 disabled={saving}
               >
                 {saving ? (
@@ -394,16 +409,18 @@ const UserProfile = () => {
                   </>
                 ) : (
                   <>
-                    <i className="bi bi-check-circle me-2"></i>
+                    <i className="mdi mdi-content-save me-2"></i>
                     Guardar Cambios
                   </>
                 )}
               </button>
             </div>
           </form>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

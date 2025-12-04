@@ -222,12 +222,12 @@ class Proveedor(models.Model):
     
 TIPO_DOC_FACTURA_ELECTRONICA = 'factura electrónica'
 TIPO_DOC_FACTURA_EXENTA = 'factura exenta'
-TIPO_DOC_BOLETA_COMPRA = 'boleta de compra'
+TIPO_DOC_BOLETA_ELECTRONICA = 'boleta electronica'
 TIPO_DOC_BOLETA_HONORARIOS = 'boleta de honorarios'
 TIPO_DOC_CHOICES = [
     (TIPO_DOC_FACTURA_ELECTRONICA, 'Factura Electrónica'),
     (TIPO_DOC_FACTURA_EXENTA, 'Factura Exenta'),
-    (TIPO_DOC_BOLETA_COMPRA, 'Boleta de Compra'),
+    (TIPO_DOC_BOLETA_ELECTRONICA, 'Boleta Electrónica'),
     (TIPO_DOC_BOLETA_HONORARIOS, 'Boleta de Honorarios'),
 ]
 

@@ -144,66 +144,100 @@ const ProjectTeam = () => {
   };
 
   /**
-   * Obtiene los usuarios que no están en el equipo.
+   * Obtiene los usuarios que no están en el equipo y que pertenecen a la misma organización del proyecto.
    */
   const getUsuariosDisponibles = () => {
+    // Si no hay proyecto cargado, retornar array vacío
+    if (!proyecto || !proyecto.id_organizacion) {
+      return [];
+    }
+    
     const usuariosEnEquipo = equipo.map(miembro => miembro.usuario_id);
-    return usuarios.filter(usuario => !usuariosEnEquipo.includes(usuario.id));
+    
+    // Filtrar usuarios que:
+    // 1. No están ya en el equipo
+    // 2. Pertenecen a la misma organización del proyecto
+    return usuarios.filter(usuario => 
+      !usuariosEnEquipo.includes(usuario.id) &&
+      usuario.id_organizacion === proyecto.id_organizacion
+    );
   };
 
   /**
-   * Obtiene el badge de color para un rol.
+   * Obtiene el badge de color para un rol (usando estilos del template).
    */
   const getRolBadgeClass = (rolNombre) => {
     const clases = {
-      'admin proyecto': 'bg-primary',
-      'ejecutor': 'bg-success',
-      'auditor': 'bg-info',
-      'directivo': 'bg-warning',
-      'superadmin': 'bg-danger',
+      'admin proyecto': 'badge-gradient-primary',
+      'ejecutor': 'badge-gradient-success',
+      'auditor': 'badge-gradient-info',
+      'directivo': 'badge-gradient-warning',
+      'superadmin': 'badge-gradient-danger',
     };
-    return clases[rolNombre] || 'bg-secondary';
+    return clases[rolNombre] || 'badge-gradient-secondary';
   };
 
   if (loading) {
     return (
-      <div className="container mt-4">
-        <div className="d-flex justify-content-center">
-          <div className="spinner-border" role="status">
-            <span className="visually-hidden">Cargando...</span>
-          </div>
+      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Cargando...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mt-4">
-      <div className="row mb-4">
-        <div className="col-12">
-          <div className="d-flex justify-content-between align-items-center">
-            <div>
-              <h2>Equipo del Proyecto</h2>
-              {proyecto && (
-                <p className="text-muted mb-0">{proyecto.nombre_proyecto}</p>
-              )}
-            </div>
-            <button
-              className="btn btn-outline-secondary"
-              onClick={() => navigate(`/proyecto/${id}`)}
-            >
-              Volver al Proyecto
-            </button>
+    <>
+      <ToastContainer position="top-right" autoClose={3000} />
+
+      {/* Page Header estilo template */}
+      <div className="container">
+        <div className="d-flex justify-content-between align-items-center">
+          <div>
+            <h3 className="page-title">
+              <span className="page-title-icon bg-gradient-primary text-white me-2">
+                <i className="mdi mdi-account-group"></i>
+              </span>
+              Equipo del Proyecto
+            </h3>
+            {proyecto && (
+              <nav aria-label="breadcrumb">
+                <ul className="breadcrumb">
+                  <li className="breadcrumb-item">
+                    <a href="/" className="text-decoration-none">Dashboard</a>
+                  </li>
+                  <li className="breadcrumb-item">
+                    <a href={`/proyecto/${id}`} className="text-decoration-none">
+                      {proyecto.nombre_proyecto}
+                    </a>
+                  </li>
+                  <li className="breadcrumb-item active" aria-current="page">
+                    Equipo
+                  </li>
+                </ul>
+              </nav>
+            )}
           </div>
+          <button
+            className="btn btn-gradient-secondary"
+            onClick={() => navigate(`/proyecto/${id}`)}
+          >
+            <i className="mdi mdi-arrow-left me-2"></i>
+            Volver al Proyecto
+          </button>
         </div>
       </div>
 
       {/* Formulario para agregar usuario */}
       <div className="row mb-4">
-        <div className="col-12">
-          <div className="card shadow">
+        <div className="col-12 grid-margin stretch-card">
+          <div className="card">
             <div className="card-body">
-              <h5 className="card-title mb-4">Agregar Usuario al Equipo</h5>
+              <h4 className="card-title mb-4">
+                <i className="mdi mdi-account-plus me-2"></i>
+                Agregar Usuario al Equipo
+              </h4>
               <form onSubmit={handleAgregarUsuario}>
                 <div className="row">
                   <div className="col-md-5 mb-3">
@@ -241,7 +275,9 @@ const ProjectTeam = () => {
                       required
                     >
                       <option value="">Selecciona un rol</option>
-                      {roles.map(rol => (
+                      {roles
+                        .filter(rol => rol.nombre_rol?.toLowerCase() !== 'superadmin')
+                        .map(rol => (
                         <option key={rol.id} value={rol.id}>
                           {rol.nombre_rol}
                         </option>
@@ -251,10 +287,20 @@ const ProjectTeam = () => {
                   <div className="col-md-2 mb-3 d-flex align-items-end">
                     <button
                       type="submit"
-                      className="btn btn-primary w-100"
+                      className="btn btn-gradient-primary w-100"
                       disabled={agregandoUsuario || getUsuariosDisponibles().length === 0}
                     >
-                      {agregandoUsuario ? 'Agregando...' : 'Agregar'}
+                      {agregandoUsuario ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                          Agregando...
+                        </>
+                      ) : (
+                        <>
+                          <i className="mdi mdi-account-plus me-2"></i>
+                          Agregar
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -271,10 +317,13 @@ const ProjectTeam = () => {
 
       {/* Lista del equipo */}
       <div className="row">
-        <div className="col-12">
-          <div className="card shadow">
+        <div className="col-12 grid-margin stretch-card">
+          <div className="card">
             <div className="card-body">
-              <h5 className="card-title mb-4">Miembros del Equipo</h5>
+              <h4 className="card-title mb-4">
+                <i className="mdi mdi-account-multiple me-2"></i>
+                Miembros del Equipo
+              </h4>
               
               {equipo.length === 0 ? (
                 <p className="text-muted text-center">No hay usuarios en el equipo</p>
@@ -304,7 +353,7 @@ const ProjectTeam = () => {
                                 {miembro.roles.map((rol, index) => (
                                   <span
                                     key={index}
-                                    className={`badge ${getRolBadgeClass(rol.nombre)} text-white`}
+                                    className={`badge ${getRolBadgeClass(rol.nombre)}`}
                                   >
                                     {rol.nombre}
                                   </span>
@@ -328,18 +377,21 @@ const ProjectTeam = () => {
                                 style={{ width: 'auto', minWidth: '150px' }}
                               >
                                 <option value="">Cambiar rol...</option>
-                                {roles.map(rol => (
-                                  <option key={rol.id} value={rol.id}>
-                                    {rol.nombre_rol}
-                                  </option>
-                                ))}
+                                {roles
+                                  .filter(rol => rol.nombre_rol?.toLowerCase() !== 'superadmin')
+                                  .map(rol => (
+                                    <option key={rol.id} value={rol.id}>
+                                      {rol.nombre_rol}
+                                    </option>
+                                  ))}
                               </select>
                               <button
                                 type="button"
-                                className="btn btn-sm btn-outline-danger"
+                                className="btn btn-sm btn-gradient-danger"
                                 onClick={() => handleQuitarUsuario(miembro.usuario_id)}
                                 title="Quitar del equipo"
                               >
+                                <i className="mdi mdi-account-remove me-1"></i>
                                 Quitar
                               </button>
                             </div>
@@ -355,8 +407,7 @@ const ProjectTeam = () => {
         </div>
       </div>
 
-      <ToastContainer position="top-right" autoClose={3000} />
-    </div>
+    </>
   );
 };
 

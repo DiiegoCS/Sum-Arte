@@ -100,11 +100,9 @@ const CerrarRendicion = () => {
 
   if (loading) {
     return (
-      <div className="container mt-4">
-        <div className="d-flex justify-content-center">
-          <div className="spinner-border" role="status">
-            <span className="visually-hidden">Cargando...</span>
-          </div>
+      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Cargando...</span>
         </div>
       </div>
     );
@@ -112,8 +110,14 @@ const CerrarRendicion = () => {
 
   if (!proyecto || !validacion) {
     return (
-      <div className="container mt-4">
-        <div className="alert alert-warning">No se pudieron cargar los datos del proyecto.</div>
+      <div className="row">
+        <div className="col-12 grid-margin stretch-card">
+          <div className="card">
+            <div className="card-body">
+              <div className="alert alert-warning">No se pudieron cargar los datos del proyecto.</div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -121,100 +125,157 @@ const CerrarRendicion = () => {
   const { errores = [], advertencias = [], valido = false, resumen = {} } = validacion;
 
   return (
-    <div className="container mt-4">
+    <>
       <ToastContainer position="top-right" autoClose={3000} />
       
-      {/* Encabezado */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h1>Cerrar Rendición: {proyecto.nombre_proyecto}</h1>
-          <p className="text-muted">Acción final que bloquea ediciones futuras</p>
-        </div>
-        <div className="d-flex gap-2">
-          {(proyecto.estado_proyecto === 'completado' || proyecto.estado_proyecto === 'cerrado') && (
-            <button
-              className="btn btn-primary"
-              onClick={handleDescargarReporteOficial}
-              disabled={descargandoReporte}
-              title="Descargar reporte oficial de rendición"
+      {/* Page Header estilo template */}
+      <div className="page-header">
+        <div className="d-flex justify-content-between align-items-center">
+          <div>
+            <h3 className="page-title">
+              <span className="page-title-icon bg-gradient-danger text-white me-2">
+                <i className="mdi mdi-lock"></i>
+              </span>
+              Cerrar Rendición: {proyecto.nombre_proyecto}
+            </h3>
+            <nav aria-label="breadcrumb">
+              <ul className="breadcrumb">
+                <li className="breadcrumb-item">
+                  <a href="/" className="text-decoration-none">Dashboard</a>
+                </li>
+                <li className="breadcrumb-item">
+                  <a href={`/proyecto/${id}`} className="text-decoration-none">{proyecto.nombre_proyecto}</a>
+                </li>
+                <li className="breadcrumb-item active" aria-current="page">
+                  Cerrar Rendición
+                </li>
+              </ul>
+            </nav>
+          </div>
+          <div className="d-flex gap-2">
+            {(proyecto.estado_proyecto === 'completado' || proyecto.estado_proyecto === 'cerrado') && (
+              <button
+                className="btn btn-gradient-primary"
+                onClick={handleDescargarReporteOficial}
+                disabled={descargandoReporte}
+                title="Descargar reporte oficial de rendición"
+              >
+                {descargandoReporte ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                    Generando...
+                  </>
+                ) : (
+                  <>
+                    <i className="mdi mdi-file-pdf-box me-2"></i>
+                    Reporte Oficial
+                  </>
+                )}
+              </button>
+            )}
+            <button 
+              className="btn btn-gradient-info" 
+              onClick={() => navigate(`/proyecto/${id}/pre-rendicion`)}
+              disabled={cerrando}
             >
-              {descargandoReporte ? (
-                <>
-                  <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                  Generando...
-                </>
-              ) : (
-                <>
-                  <i className="bi bi-file-pdf me-2"></i>
-                  Reporte Oficial
-                </>
-              )}
+              <i className="mdi mdi-arrow-left me-2"></i>
+              Volver a Pre-Rendición
             </button>
-          )}
-          <button 
-            className="btn btn-secondary" 
-            onClick={() => navigate(`/proyecto/${id}/pre-rendicion`)}
-            disabled={cerrando}
-          >
-            Volver a Pre-Rendición
-          </button>
+          </div>
         </div>
       </div>
 
       {/* Advertencia importante */}
-      <div className="alert alert-warning" role="alert">
-        <h5 className="alert-heading">
-          <i className="bi bi-exclamation-triangle me-2"></i>
-          Advertencia Importante
-        </h5>
-        <p className="mb-0">
-          Al cerrar la rendición, el proyecto quedará bloqueado para ediciones futuras.
-          Esta acción no se puede deshacer. Asegúrese de que todos los datos estén correctos antes de continuar.
-        </p>
+      <div className="row">
+        <div className="col-12 grid-margin stretch-card">
+          <div className="card border-warning">
+            <div className="card-body bg-gradient-warning text-dark">
+              <h4 className="card-title mb-3">
+                <i className="mdi mdi-alert me-2"></i>
+                Advertencia Importante
+              </h4>
+              <p className="mb-0">
+                Al cerrar la rendición, el proyecto quedará bloqueado para ediciones futuras.
+                Esta acción no se puede deshacer. Asegúrese de que todos los datos estén correctos antes de continuar.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Resumen de validación */}
-      <div className="card mb-4">
-        <div className="card-header">
-          <h5>Estado de Validación</h5>
-        </div>
-        <div className="card-body">
-          {valido ? (
-            <div className="alert alert-success mb-0">
-              <i className="bi bi-check-circle me-2"></i>
-              El proyecto cumple con todos los requisitos para cerrar la rendición.
+      <div className="row">
+        <div className="col-12 grid-margin stretch-card">
+          <div className="card">
+            <div className="card-body">
+              <h4 className="card-title mb-3">Estado de Validación</h4>
+              {valido ? (
+                <div className="alert alert-success mb-0">
+                  <i className="mdi mdi-check-circle me-2"></i>
+                  El proyecto cumple con todos los requisitos para cerrar la rendición.
+                </div>
+              ) : (
+                <div className="alert alert-danger mb-0">
+                  <i className="mdi mdi-close-circle me-2"></i>
+                  El proyecto no cumple con los requisitos. Por favor, corrija los errores antes de continuar.
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="alert alert-danger mb-0">
-              <i className="bi bi-x-circle me-2"></i>
-              El proyecto no cumple con los requisitos. Por favor, corrija los errores antes de continuar.
-            </div>
-          )}
+          </div>
         </div>
       </div>
 
       {/* Resumen de transacciones */}
-      <div className="card mb-4">
-        <div className="card-header">
-          <h5>Resumen Final</h5>
+      <div className="row">
+        <div className="col-md-3 stretch-card grid-margin">
+          <div className="card bg-gradient-primary card-img-holder text-white">
+            <div className="card-body">
+              <img src="/src/assets/images/dashboard/circle.svg" className="card-img-absolute" alt="circle-image" style={{ right: '0', top: '0', opacity: '0.1' }} />
+              <h4 className="font-weight-normal mb-3">
+                Presupuesto Total
+                <i className="mdi mdi-wallet mdi-24px float-end"></i>
+              </h4>
+              <h2 className="mb-5">
+                ${parseFloat(proyecto.presupuesto_total || 0).toLocaleString('es-CL')}
+              </h2>
+            </div>
+          </div>
         </div>
-        <div className="card-body">
-          <div className="row">
-            <div className="col-md-6 mb-3">
-              <strong>Presupuesto Total:</strong>
-              <p className="fs-4">${parseFloat(proyecto.presupuesto_total || 0).toLocaleString('es-CL')}</p>
+        <div className="col-md-3 stretch-card grid-margin">
+          <div className="card bg-gradient-success card-img-holder text-white">
+            <div className="card-body">
+              <img src="/src/assets/images/dashboard/circle.svg" className="card-img-absolute" alt="circle-image" style={{ right: '0', top: '0', opacity: '0.1' }} />
+              <h4 className="font-weight-normal mb-3">
+                Monto Ejecutado
+                <i className="mdi mdi-check-circle mdi-24px float-end"></i>
+              </h4>
+              <h2 className="mb-5">
+                ${parseFloat(proyecto.monto_ejecutado_proyecto || 0).toLocaleString('es-CL')}
+              </h2>
             </div>
-            <div className="col-md-6 mb-3">
-              <strong>Monto Ejecutado:</strong>
-              <p className="fs-4">${parseFloat(proyecto.monto_ejecutado_proyecto || 0).toLocaleString('es-CL')}</p>
+          </div>
+        </div>
+        <div className="col-md-3 stretch-card grid-margin">
+          <div className="card bg-gradient-info card-img-holder text-white">
+            <div className="card-body">
+              <img src="/src/assets/images/dashboard/circle.svg" className="card-img-absolute" alt="circle-image" style={{ right: '0', top: '0', opacity: '0.1' }} />
+              <h4 className="font-weight-normal mb-3">
+                Total Transacciones
+                <i className="mdi mdi-receipt mdi-24px float-end"></i>
+              </h4>
+              <h2 className="mb-5">{resumen.total_transacciones || 0}</h2>
             </div>
-            <div className="col-md-6 mb-3">
-              <strong>Total de Transacciones:</strong>
-              <p className="fs-4">{resumen.total_transacciones || 0}</p>
-            </div>
-            <div className="col-md-6 mb-3">
-              <strong>Transacciones Aprobadas:</strong>
-              <p className="fs-4 text-success">{resumen.aprobadas || 0}</p>
+          </div>
+        </div>
+        <div className="col-md-3 stretch-card grid-margin">
+          <div className="card bg-gradient-warning card-img-holder text-white">
+            <div className="card-body">
+              <img src="/src/assets/images/dashboard/circle.svg" className="card-img-absolute" alt="circle-image" style={{ right: '0', top: '0', opacity: '0.1' }} />
+              <h4 className="font-weight-normal mb-3">
+                Aprobadas
+                <i className="mdi mdi-check-all mdi-24px float-end"></i>
+              </h4>
+              <h2 className="mb-5">{resumen.aprobadas || 0}</h2>
             </div>
           </div>
         </div>
@@ -222,92 +283,107 @@ const CerrarRendicion = () => {
 
       {/* Errores (si los hay) */}
       {errores.length > 0 && (
-        <div className="card mb-4 border-danger">
-          <div className="card-header bg-danger text-white">
-            <h5 className="mb-0">Errores que impiden cerrar la rendición</h5>
-          </div>
-          <div className="card-body">
-            <ul className="list-unstyled mb-0">
-              {errores.map((error, index) => (
-                <li key={index} className="mb-2">
-                  <span className="badge bg-danger me-2">✗</span>
-                  {error}
-                </li>
-              ))}
-            </ul>
+        <div className="row">
+          <div className="col-12 grid-margin stretch-card">
+            <div className="card border-danger">
+              <div className="card-body bg-gradient-danger text-white">
+                <h4 className="card-title mb-3">
+                  <i className="mdi mdi-close-circle me-2"></i>
+                  Errores que impiden cerrar la rendición
+                </h4>
+                <ul className="list-unstyled mb-0">
+                  {errores.map((error, index) => (
+                    <li key={index} className="mb-2 p-2 bg-white bg-opacity-20 rounded">
+                      <i className="mdi mdi-alert-circle text-white me-2"></i>
+                      {error}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       {/* Advertencias (si las hay) */}
       {advertencias.length > 0 && (
-        <div className="card mb-4 border-warning">
-          <div className="card-header bg-warning text-dark">
-            <h5 className="mb-0">Advertencias</h5>
-          </div>
-          <div className="card-body">
-            <ul className="list-unstyled mb-0">
-              {advertencias.map((advertencia, index) => (
-                <li key={index} className="mb-2">
-                  <span className="badge bg-warning text-dark me-2">⚠</span>
-                  {advertencia}
-                </li>
-              ))}
-            </ul>
+        <div className="row">
+          <div className="col-12 grid-margin stretch-card">
+            <div className="card border-warning">
+              <div className="card-body bg-gradient-warning text-dark">
+                <h4 className="card-title mb-3">
+                  <i className="mdi mdi-alert me-2"></i>
+                  Advertencias
+                </h4>
+                <ul className="list-unstyled mb-0">
+                  {advertencias.map((advertencia, index) => (
+                    <li key={index} className="mb-2 p-2 bg-white bg-opacity-20 rounded">
+                      <i className="mdi mdi-alert-circle text-dark me-2"></i>
+                      {advertencia}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       {/* Confirmación y botones de acción */}
-      <div className="card">
-        <div className="card-body">
-          <div className="form-check mb-4">
-            <input
-              className="form-check-input"
-              type="checkbox"
-              id="confirmarCierre"
-              checked={confirmado}
-              onChange={(e) => setConfirmado(e.target.checked)}
-              disabled={!valido || cerrando}
-            />
-            <label className="form-check-label" htmlFor="confirmarCierre">
-              <strong>Confirmo que he revisado todos los datos y deseo cerrar la rendición.</strong>
-              <br />
-              <small className="text-muted">
-                Esta acción bloqueará el proyecto para ediciones futuras y no se puede deshacer.
-              </small>
-            </label>
-          </div>
+      <div className="row">
+        <div className="col-12 grid-margin stretch-card">
+          <div className="card">
+            <div className="card-body">
+              <div className="form-check mb-4">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  id="confirmarCierre"
+                  checked={confirmado}
+                  onChange={(e) => setConfirmado(e.target.checked)}
+                  disabled={!valido || cerrando}
+                />
+                <label className="form-check-label" htmlFor="confirmarCierre">
+                  <strong>Confirmo que he revisado todos los datos y deseo cerrar la rendición.</strong>
+                  <br />
+                  <small className="text-muted">
+                    Esta acción bloqueará el proyecto para ediciones futuras y no se puede deshacer.
+                  </small>
+                </label>
+              </div>
 
-          <div className="d-flex justify-content-between">
-            <button
-              className="btn btn-secondary"
-              onClick={() => navigate(`/proyecto/${id}/pre-rendicion`)}
-              disabled={cerrando}
-            >
-              Cancelar
-            </button>
-            <button
-              className="btn btn-danger btn-lg"
-              onClick={handleCerrarRendicion}
-              disabled={!valido || !confirmado || cerrando}
-            >
-              {cerrando ? (
-                <>
-                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                  Cerrando...
-                </>
-              ) : (
-                <>
-                  <i className="bi bi-lock me-2"></i>
-                  Cerrar Rendición
-                </>
-              )}
-            </button>
+              <div className="d-flex justify-content-between">
+                <button
+                  className="btn btn-gradient-secondary"
+                  onClick={() => navigate(`/proyecto/${id}/pre-rendicion`)}
+                  disabled={cerrando}
+                >
+                  <i className="mdi mdi-close me-2"></i>
+                  Cancelar
+                </button>
+                <button
+                  className="btn btn-gradient-danger btn-lg"
+                  onClick={handleCerrarRendicion}
+                  disabled={!valido || !confirmado || cerrando}
+                >
+                  {cerrando ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      Cerrando...
+                    </>
+                  ) : (
+                    <>
+                      <i className="mdi mdi-lock me-2"></i>
+                      Cerrar Rendición
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

@@ -43,52 +43,75 @@ const Login = () => {
   };
 
   return (
-    <div className="container">
-      <div className="row justify-content-center mt-5">
-        <div className="col-md-6 col-lg-12">
-          <div className="card shadow">
-            <div className="card-body">
-              <h2 className="card-title text-center mb-4">Sum-Arte</h2>
-              <h5 className="text-center text-muted mb-4">Iniciar Sesión</h5>
-              
-              <form onSubmit={handleSubmit}>
-                <div className="mb-3">
-                  <label htmlFor="username" className="form-label">
-                    Usuario
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    id="username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                    autoFocus
-                  />
+    <div className="container-scroller">
+      <div className="container-fluid page-body-wrapper full-page-wrapper">
+        <div className="content-wrapper d-flex align-items-center auth px-0">
+          <div className="row w-100 mx-0">
+            <div className="col-lg-4 mx-auto">
+              <div className="auth-form-light text-left py-5 px-4 px-sm-5">
+                <div className="brand-logo text-center mb-4">
+                  <h2 className="text-primary">
+                    <i className="mdi mdi-palette me-2"></i>
+                    Sum-Arte
+                  </h2>
                 </div>
+                <h4 className="text-center mb-4">Iniciar Sesión</h4>
                 
-                <div className="mb-3">
-                  <label htmlFor="password" className="form-label">
-                    Contraseña
-                  </label>
-                  <input
-                    type="password"
-                    className="form-control"
-                    id="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                
-                <button
-                  type="submit"
-                  className="btn btn-primary w-100"
-                  disabled={loading}
-                >
-                  {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
-                </button>
-              </form>
+                <form className="pt-3" onSubmit={handleSubmit}>
+                  <div className="form-group">
+                    <label htmlFor="username" className="form-label">
+                      <i className="mdi mdi-account me-1"></i>
+                      Usuario
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control form-control-lg"
+                      id="username"
+                      placeholder="Ingrese su usuario"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label htmlFor="password" className="form-label">
+                      <i className="mdi mdi-lock me-1"></i>
+                      Contraseña
+                    </label>
+                    <input
+                      type="password"
+                      className="form-control form-control-lg"
+                      id="password"
+                      placeholder="Ingrese su contraseña"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="mt-3">
+                    <button
+                      type="submit"
+                      className="btn btn-block btn-gradient-primary btn-lg font-weight-medium auth-form-btn"
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                          Iniciando sesión...
+                        </>
+                      ) : (
+                        <>
+                          <i className="mdi mdi-login me-2"></i>
+                          Iniciar Sesión
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           </div>
         </div>
