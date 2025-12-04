@@ -202,40 +202,61 @@ const InviteUser = () => {
   };
 
   /**
-   * Obtiene el badge de estado para una invitación.
+   * Obtiene el badge de estado para una invitación (usando estilos del template).
    * @param {Object} invitacion - Objeto de invitación
    * @returns {JSX.Element} Badge con el estado
    */
   const getEstadoBadge = (invitacion) => {
     const estados = {
-      'pendiente': { clase: 'bg-warning', texto: 'Pendiente' },
-      'aceptada': { clase: 'bg-success', texto: 'Aceptada' },
-      'expirada': { clase: 'bg-secondary', texto: 'Expirada' },
-      'cancelada': { clase: 'bg-danger', texto: 'Cancelada' },
+      'pendiente': { clase: 'badge-gradient-warning', texto: 'Pendiente' },
+      'aceptada': { clase: 'badge-gradient-success', texto: 'Aceptada' },
+      'expirada': { clase: 'badge-gradient-secondary', texto: 'Expirada' },
+      'cancelada': { clase: 'badge-gradient-danger', texto: 'Cancelada' },
     };
 
     const estado = estados[invitacion.estado] || estados['pendiente'];
     return (
-      <span className={`badge ${estado.clase} text-white`}>
+      <span className={`badge ${estado.clase}`}>
         {estado.texto}
       </span>
     );
   };
 
   return (
-    <div className="container mt-4">
-      <div className="row">
-        <div className="col-12">
-          <h2 className="mb-4">Invitar Usuarios</h2>
+    <>
+      <ToastContainer position="top-right" autoClose={3000} />
+
+      {/* Page Header estilo template */}
+      <div className="page-header">
+        <div>
+          <h3 className="page-title">
+            <span className="page-title-icon bg-gradient-primary text-white me-2">
+              <i className="mdi mdi-account-plus"></i>
+            </span>
+            Invitar Usuarios
+          </h3>
+          <nav aria-label="breadcrumb">
+            <ul className="breadcrumb">
+              <li className="breadcrumb-item">
+                <a href="/" className="text-decoration-none">Dashboard</a>
+              </li>
+              <li className="breadcrumb-item active" aria-current="page">
+                Invitar Usuarios
+              </li>
+            </ul>
+          </nav>
         </div>
       </div>
 
       <div className="row">
         {/* Formulario de invitación */}
-        <div className="col-md-6">
-          <div className="card shadow mb-4">
+        <div className="col-md-6 grid-margin stretch-card">
+          <div className="card">
             <div className="card-body">
-              <h5 className="card-title mb-4">Nueva Invitación</h5>
+              <h4 className="card-title mb-4">
+                <i className="mdi mdi-email-plus me-2"></i>
+                Nueva Invitación
+              </h4>
               
               <form onSubmit={handleSubmit}>
                 <div className="mb-3">
@@ -308,10 +329,20 @@ const InviteUser = () => {
                 <div className="d-grid">
                   <button
                     type="submit"
-                    className="btn btn-primary"
+                    className="btn btn-gradient-primary"
                     disabled={loading}
                   >
-                    {loading ? 'Enviando invitación...' : 'Enviar Invitación'}
+                    {loading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                        Enviando invitación...
+                      </>
+                    ) : (
+                      <>
+                        <i className="mdi mdi-send me-2"></i>
+                        Enviar Invitación
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -320,19 +351,25 @@ const InviteUser = () => {
         </div>
 
         {/* Lista de invitaciones */}
-        <div className="col-md-6">
-          <div className="card shadow">
+        <div className="col-md-6 grid-margin stretch-card">
+          <div className="card">
             <div className="card-body">
-              <h5 className="card-title mb-4">Invitaciones Enviadas</h5>
+              <h4 className="card-title mb-4">
+                <i className="mdi mdi-email-multiple me-2"></i>
+                Invitaciones Enviadas
+              </h4>
               
               {cargandoInvitaciones ? (
-                <div className="text-center">
-                  <div className="spinner-border" role="status">
+                <div className="text-center py-4">
+                  <div className="spinner-border text-primary" role="status">
                     <span className="visually-hidden">Cargando...</span>
                   </div>
                 </div>
               ) : invitaciones.length === 0 ? (
-                <p className="text-muted text-center">No hay invitaciones enviadas</p>
+                <div className="text-center py-4">
+                  <i className="mdi mdi-inbox fs-1 text-muted mb-3 d-block"></i>
+                  <p className="text-muted">No hay invitaciones enviadas</p>
+                </div>
               ) : (
                 <div className="list-group">
                   {invitaciones.map((invitacion) => (
@@ -340,23 +377,25 @@ const InviteUser = () => {
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <div>
                           <strong>{invitacion.email}</strong>
-                          {getEstadoBadge(invitacion)}
+                          <span className="ms-2">{getEstadoBadge(invitacion)}</span>
                         </div>
                         <div>
                           {invitacion.estado === 'pendiente' && (
                             <>
                               <button
-                                className="btn btn-sm btn-outline-primary me-1"
+                                className="btn btn-sm btn-gradient-primary me-1"
                                 onClick={() => handleReenviar(invitacion.id)}
                                 title="Reenviar invitación"
                               >
+                                <i className="mdi mdi-send me-1"></i>
                                 Reenviar
                               </button>
                               <button
-                                className="btn btn-sm btn-outline-danger"
+                                className="btn btn-sm btn-gradient-danger"
                                 onClick={() => handleCancelar(invitacion.id)}
                                 title="Cancelar invitación"
                               >
+                                <i className="mdi mdi-close me-1"></i>
                                 Cancelar
                               </button>
                             </>
@@ -364,10 +403,11 @@ const InviteUser = () => {
                         </div>
                       </div>
                       <div className="small text-muted">
-                        <div>Invitado por: {invitacion.invitado_por_nombre || 'N/A'}</div>
-                        <div>Fecha: {formatearFecha(invitacion.fecha_invitacion)}</div>
+                        <div><i className="mdi mdi-account me-1"></i>Invitado por: {invitacion.invitado_por_nombre || 'N/A'}</div>
+                        <div><i className="mdi mdi-calendar me-1"></i>Fecha: {formatearFecha(invitacion.fecha_invitacion)}</div>
                         {invitacion.dias_restantes !== null && invitacion.dias_restantes !== undefined && (
                           <div>
+                            <i className="mdi mdi-clock-alert me-1"></i>
                             Expira en: {invitacion.dias_restantes} día(s)
                           </div>
                         )}
@@ -380,9 +420,7 @@ const InviteUser = () => {
           </div>
         </div>
       </div>
-
-      <ToastContainer position="top-right" autoClose={3000} />
-    </div>
+    </>
   );
 };
 

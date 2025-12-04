@@ -480,11 +480,9 @@ const CreateEditProject = () => {
 
   if (loading) {
     return (
-      <div className="container mt-4">
-        <div className="d-flex justify-content-center">
-          <div className="spinner-border" role="status">
-            <span className="visually-hidden">Cargando...</span>
-          </div>
+      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Cargando...</span>
         </div>
       </div>
     );
@@ -495,401 +493,435 @@ const CreateEditProject = () => {
   const saldoDisponible = presupuestoTotal - totalAsignado;
 
   return (
-    <div className="container mt-4">
+    <>
       <ToastContainer position="top-right" autoClose={3000} />
       
-      {/* Encabezado */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h1>{isEditMode ? 'Editar Proyecto' : 'Crear Nuevo Proyecto'}</h1>
-          <p className="text-muted">
-            {isEditMode 
-              ? 'Modifica la información del proyecto y su presupuesto' 
-              : 'Completa los datos para crear un nuevo proyecto y configurar su presupuesto'}
-          </p>
+      {/* Page Header estilo template */}
+      <div className="container">
+        <div className="d-flex justify-content-between align-items-center">
+          <div>
+            <h3 className="page-title">
+              <span className="page-title-icon bg-gradient-primary text-white me-2">
+                <i className="mdi mdi-folder-plus"></i>
+              </span>
+              {isEditMode ? 'Editar Proyecto' : 'Crear Nuevo Proyecto'}
+            </h3>
+            <nav aria-label="breadcrumb">
+              <ul className="breadcrumb">
+                <li className="breadcrumb-item">
+                  <a href="/" className="text-decoration-none">Dashboard</a>
+                </li>
+                {isEditMode && (
+                  <li className="breadcrumb-item">
+                    <a href={`/proyecto/${id}`} className="text-decoration-none">Proyecto</a>
+                  </li>
+                )}
+                <li className="breadcrumb-item active" aria-current="page">
+                  {isEditMode ? 'Editar' : 'Crear'}
+                </li>
+              </ul>
+            </nav>
+          </div>
+          <button 
+            className="btn btn-gradient-secondary" 
+            onClick={() => navigate(isEditMode ? `/proyecto/${id}` : '/')}
+            disabled={saving}
+          >
+            <i className="mdi mdi-close me-2"></i>
+            {isEditMode ? 'Cancelar' : 'Volver'}
+          </button>
         </div>
-        <button 
-          className="btn btn-secondary" 
-          onClick={() => navigate(isEditMode ? `/proyecto/${id}` : '/')}
-          disabled={saving}
-        >
-          {isEditMode ? 'Cancelar' : 'Volver'}
-        </button>
       </div>
 
       <form onSubmit={handleSubmit}>
         {/* Información Básica del Proyecto */}
-        <div className="card mb-4">
-          <div className="card-header">
-            <h5 className="mb-0">Información Básica del Proyecto</h5>
-          </div>
-          <div className="card-body">
-            <div className="row">
-              {/* Nombre del Proyecto */}
-              <div className="col-md-12 mb-3">
-                <label htmlFor="nombre_proyecto" className="form-label">
-                  Nombre del Proyecto <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="text"
-                  className={`form-control ${errors.nombre_proyecto ? 'is-invalid' : ''}`}
-                  id="nombre_proyecto"
-                  name="nombre_proyecto"
-                  value={formData.nombre_proyecto}
-                  onChange={handleChange}
-                  placeholder="Ej: Festival de Arte Contemporáneo 2024"
-                  required
-                  disabled={saving}
-                />
-                {errors.nombre_proyecto && (
-                  <div className="invalid-feedback">{errors.nombre_proyecto}</div>
-                )}
-              </div>
+        <div className="row">
+          <div className="col-12 grid-margin stretch-card">
+            <div className="card">
+              <div className="card-body">
+                <h4 className="card-title mb-4">
+                  <i className="mdi mdi-information me-2"></i>
+                  Información Básica del Proyecto
+                </h4>
+                <div className="row">
+                  {/* Nombre del Proyecto */}
+                  <div className="col-md-12 mb-3">
+                    <label htmlFor="nombre_proyecto" className="form-label">
+                      Nombre del Proyecto <span className="text-danger">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className={`form-control ${errors.nombre_proyecto ? 'is-invalid' : ''}`}
+                      id="nombre_proyecto"
+                      name="nombre_proyecto"
+                      value={formData.nombre_proyecto}
+                      onChange={handleChange}
+                      placeholder="Ej: Festival de Arte Contemporáneo 2024"
+                      required
+                      disabled={saving}
+                    />
+                    {errors.nombre_proyecto && (
+                      <div className="invalid-feedback">{errors.nombre_proyecto}</div>
+                    )}
+                  </div>
 
-              {/* Fecha de Inicio */}
-              <div className="col-md-6 mb-3">
-                <label htmlFor="fecha_inicio_proyecto" className="form-label">
-                  Fecha de Inicio <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="date"
-                  className={`form-control ${errors.fecha_inicio_proyecto ? 'is-invalid' : ''}`}
-                  id="fecha_inicio_proyecto"
-                  name="fecha_inicio_proyecto"
-                  value={formData.fecha_inicio_proyecto}
-                  onChange={handleChange}
-                  required
-                  disabled={saving}
-                />
-                {errors.fecha_inicio_proyecto && (
-                  <div className="invalid-feedback">{errors.fecha_inicio_proyecto}</div>
-                )}
-              </div>
+                  {/* Fecha de Inicio */}
+                  <div className="col-md-6 mb-3">
+                    <label htmlFor="fecha_inicio_proyecto" className="form-label">
+                      Fecha de Inicio <span className="text-danger">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      className={`form-control ${errors.fecha_inicio_proyecto ? 'is-invalid' : ''}`}
+                      id="fecha_inicio_proyecto"
+                      name="fecha_inicio_proyecto"
+                      value={formData.fecha_inicio_proyecto}
+                      onChange={handleChange}
+                      required
+                      disabled={saving}
+                    />
+                    {errors.fecha_inicio_proyecto && (
+                      <div className="invalid-feedback">{errors.fecha_inicio_proyecto}</div>
+                    )}
+                  </div>
 
-              {/* Fecha de Fin */}
-              <div className="col-md-6 mb-3">
-                <label htmlFor="fecha_fin_proyecto" className="form-label">
-                  Fecha de Fin <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="date"
-                  className={`form-control ${errors.fecha_fin_proyecto ? 'is-invalid' : ''}`}
-                  id="fecha_fin_proyecto"
-                  name="fecha_fin_proyecto"
-                  value={formData.fecha_fin_proyecto}
-                  onChange={handleChange}
-                  required
-                  disabled={saving}
-                />
-                {errors.fecha_fin_proyecto && (
-                  <div className="invalid-feedback">{errors.fecha_fin_proyecto}</div>
-                )}
-              </div>
+                  {/* Fecha de Fin */}
+                  <div className="col-md-6 mb-3">
+                    <label htmlFor="fecha_fin_proyecto" className="form-label">
+                      Fecha de Fin <span className="text-danger">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      className={`form-control ${errors.fecha_fin_proyecto ? 'is-invalid' : ''}`}
+                      id="fecha_fin_proyecto"
+                      name="fecha_fin_proyecto"
+                      value={formData.fecha_fin_proyecto}
+                      onChange={handleChange}
+                      required
+                      disabled={saving}
+                    />
+                    {errors.fecha_fin_proyecto && (
+                      <div className="invalid-feedback">{errors.fecha_fin_proyecto}</div>
+                    )}
+                  </div>
 
-              {/* Presupuesto Total */}
-              <div className="col-md-6 mb-3">
-                <label htmlFor="presupuesto_total" className="form-label">
-                  Presupuesto Total (CLP) <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="number"
-                  className={`form-control ${errors.presupuesto_total ? 'is-invalid' : ''}`}
-                  id="presupuesto_total"
-                  name="presupuesto_total"
-                  value={formData.presupuesto_total}
-                  onChange={handleChange}
-                  placeholder="Ej: 5000000"
-                  min="0"
-                  step="0.01"
-                  required
-                  disabled={saving}
-                />
-                {errors.presupuesto_total && (
-                  <div className="invalid-feedback">{errors.presupuesto_total}</div>
-                )}
-                <small className="form-text text-muted">
-                  Ingrese el presupuesto total asignado al proyecto en pesos chilenos.
-                </small>
-              </div>
+                  {/* Presupuesto Total */}
+                  <div className="col-md-6 mb-3">
+                    <label htmlFor="presupuesto_total" className="form-label">
+                      Presupuesto Total (CLP) <span className="text-danger">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      className={`form-control ${errors.presupuesto_total ? 'is-invalid' : ''}`}
+                      id="presupuesto_total"
+                      name="presupuesto_total"
+                      value={formData.presupuesto_total}
+                      onChange={handleChange}
+                      placeholder="Ej: 5000000"
+                      min="0"
+                      step="0.01"
+                      required
+                      disabled={saving}
+                    />
+                    {errors.presupuesto_total && (
+                      <div className="invalid-feedback">{errors.presupuesto_total}</div>
+                    )}
+                    <small className="form-text text-muted">
+                      Ingrese el presupuesto total asignado al proyecto en pesos chilenos.
+                    </small>
+                  </div>
 
-              {/* Estado del Proyecto */}
-              <div className="col-md-6 mb-3">
-                <label htmlFor="estado_proyecto" className="form-label">
-                  Estado del Proyecto
-                </label>
-                <select
-                  className="form-control"
-                  id="estado_proyecto"
-                  name="estado_proyecto"
-                  value={formData.estado_proyecto}
-                  onChange={handleChange}
-                  disabled={saving}
-                >
-                  <option value="inactivo">Inactivo</option>
-                  <option value="activo">Activo</option>
-                  <option value="en_pausa">En Pausa</option>
-                  <option value="completado">Completado</option>
-                </select>
-                <small className="form-text text-muted">
-                  El estado inicial por defecto es "Inactivo". Puede cambiarlo después de crear el proyecto.
-                </small>
+                  {/* Estado del Proyecto */}
+                  <div className="col-md-6 mb-3">
+                    <label htmlFor="estado_proyecto" className="form-label">
+                      Estado del Proyecto
+                    </label>
+                    <select
+                      className="form-control"
+                      id="estado_proyecto"
+                      name="estado_proyecto"
+                      value={formData.estado_proyecto}
+                      onChange={handleChange}
+                      disabled={saving}
+                    >
+                      <option value="inactivo">Inactivo</option>
+                      <option value="activo">Activo</option>
+                      <option value="en_pausa">En Pausa</option>
+                      <option value="completado">Completado</option>
+                    </select>
+                    <small className="form-text text-muted">
+                      El estado inicial por defecto es "Inactivo". Puede cambiarlo después de crear el proyecto.
+                    </small>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Items Presupuestarios */}
-        <div className="card mb-4">
-          <div className="card-header d-flex justify-content-between align-items-center">
-            <h5 className="mb-0">Ítems Presupuestarios</h5>
-            <button
-              type="button"
-              className="btn btn-sm btn-primary"
-              onClick={agregarItem}
-              disabled={saving}
-            >
-              <i className="bi bi-plus-circle me-1"></i>
-              Agregar Ítem
-            </button>
-          </div>
-          <div className="card-body">
-            {items.length === 0 ? (
-              <p className="text-muted text-center py-3">
-                No hay ítems presupuestarios. Haga clic en "Agregar Ítem" para comenzar.
-              </p>
-            ) : (
-              <>
-                {items.map((item, itemIndex) => {
-                  const montoItem = parseFloat(item.monto_asignado_item) || 0;
-                  const montoSubitems = item.subitems.reduce((sum, subitem) => {
-                    return sum + (parseFloat(subitem.monto_asignado_subitem) || 0);
-                  }, 0);
-                  const montoTotalItem = montoSubitems > 0 ? montoSubitems : montoItem;
-                  const isExpanded = expandedItems.has(itemIndex);
-
-                  return (
-                    <div key={itemIndex} className="card mb-3">
-                      <div className="card-header bg-light">
-                        <div className="d-flex justify-content-between align-items-center">
-                          <div className="flex-grow-1">
-                            <input
-                              type="text"
-                              className={`form-control form-control-sm d-inline-block ${errors[`item_${itemIndex}_nombre`] ? 'is-invalid' : ''}`}
-                              style={{ width: '300px' }}
-                              placeholder="Nombre del ítem"
-                              value={item.nombre_item_presupuesto}
-                              onChange={(e) => actualizarItem(itemIndex, 'nombre_item_presupuesto', e.target.value)}
-                              disabled={saving}
-                            />
-                            {errors[`item_${itemIndex}_nombre`] && (
-                              <div className="invalid-feedback d-block">{errors[`item_${itemIndex}_nombre`]}</div>
-                            )}
-                          </div>
-                          <div className="d-flex gap-2 align-items-center">
-                            <span className="badge bg-info">
-                              Total: ${montoTotalItem.toLocaleString('es-CL')}
-                            </span>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-outline-secondary"
-                              onClick={() => toggleItem(itemIndex)}
-                              disabled={saving}
-                            >
-                              <i className={`bi bi-chevron-${isExpanded ? 'up' : 'down'}`}></i>
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-outline-danger"
-                              onClick={() => eliminarItem(itemIndex)}
-                              disabled={saving}
-                            >
-                              <i className="bi bi-trash"></i>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                      {isExpanded && (
-                        <div className="card-body">
-                          <div className="row mb-3">
-                            <div className="col-md-6">
-                              <label className="form-label">Monto Asignado (CLP) <span className="text-danger">*</span></label>
-                              <input
-                                type="number"
-                                className={`form-control ${errors[`item_${itemIndex}_monto`] ? 'is-invalid' : ''}`}
-                                placeholder="0.00"
-                                min="0"
-                                step="0.01"
-                                value={item.monto_asignado_item}
-                                onChange={(e) => actualizarItem(itemIndex, 'monto_asignado_item', e.target.value)}
-                                disabled={saving || item.subitems.length > 0}
-                              />
-                              {errors[`item_${itemIndex}_monto`] && (
-                                <div className="invalid-feedback">{errors[`item_${itemIndex}_monto`]}</div>
-                              )}
-                              {item.subitems.length > 0 && (
-                                <small className="form-text text-muted">
-                                  El monto se calcula automáticamente desde los subítems.
-                                </small>
-                              )}
-                            </div>
-                            <div className="col-md-6">
-                              <label className="form-label">Categoría</label>
-                              <input
-                                type="text"
-                                className="form-control"
-                                placeholder="Ej: Materiales, Servicios, etc."
-                                value={item.categoria_item}
-                                onChange={(e) => actualizarItem(itemIndex, 'categoria_item', e.target.value)}
-                                disabled={saving}
-                              />
-                            </div>
-                          </div>
-
-                          {/* Subitems */}
-                          <div className="mb-3">
-                            <div className="d-flex justify-content-between align-items-center mb-2">
-                              <h6 className="mb-0">Subítems</h6>
-                              <button
-                                type="button"
-                                className="btn btn-sm btn-outline-primary"
-                                onClick={() => agregarSubitem(itemIndex)}
-                                disabled={saving}
-                              >
-                                <i className="bi bi-plus-circle me-1"></i>
-                                Agregar Subítem
-                              </button>
-                            </div>
-                            {item.subitems.length === 0 ? (
-                              <p className="text-muted small">No hay subítems. Puede agregar subítems o usar el monto del ítem directamente.</p>
-                            ) : (
-                              <div className="table-responsive">
-                                <table className="table table-sm table-bordered">
-                                  <thead>
-                                    <tr>
-                                      <th>Nombre</th>
-                                      <th>Monto (CLP)</th>
-                                      <th>Categoría</th>
-                                      <th>Acciones</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {item.subitems.map((subitem, subitemIndex) => (
-                                      <tr key={subitemIndex}>
-                                        <td>
-                                          <input
-                                            type="text"
-                                            className={`form-control form-control-sm ${errors[`item_${itemIndex}_subitem_${subitemIndex}_nombre`] ? 'is-invalid' : ''}`}
-                                            placeholder="Nombre del subítem"
-                                            value={subitem.nombre_subitem_presupuesto}
-                                            onChange={(e) => actualizarSubitem(itemIndex, subitemIndex, 'nombre_subitem_presupuesto', e.target.value)}
-                                            disabled={saving}
-                                          />
-                                          {errors[`item_${itemIndex}_subitem_${subitemIndex}_nombre`] && (
-                                            <div className="invalid-feedback d-block">{errors[`item_${itemIndex}_subitem_${subitemIndex}_nombre`]}</div>
-                                          )}
-                                        </td>
-                                        <td>
-                                          <input
-                                            type="number"
-                                            className={`form-control form-control-sm ${errors[`item_${itemIndex}_subitem_${subitemIndex}_monto`] ? 'is-invalid' : ''}`}
-                                            placeholder="0.00"
-                                            min="0"
-                                            step="0.01"
-                                            value={subitem.monto_asignado_subitem}
-                                            onChange={(e) => actualizarSubitem(itemIndex, subitemIndex, 'monto_asignado_subitem', e.target.value)}
-                                            disabled={saving}
-                                          />
-                                          {errors[`item_${itemIndex}_subitem_${subitemIndex}_monto`] && (
-                                            <div className="invalid-feedback d-block">{errors[`item_${itemIndex}_subitem_${subitemIndex}_monto`]}</div>
-                                          )}
-                                        </td>
-                                        <td>
-                                          <input
-                                            type="text"
-                                            className="form-control form-control-sm"
-                                            placeholder="Categoría"
-                                            value={subitem.categoria_subitem}
-                                            onChange={(e) => actualizarSubitem(itemIndex, subitemIndex, 'categoria_subitem', e.target.value)}
-                                            disabled={saving}
-                                          />
-                                        </td>
-                                        <td>
-                                          <button
-                                            type="button"
-                                            className="btn btn-sm btn-outline-danger"
-                                            onClick={() => eliminarSubitem(itemIndex, subitemIndex)}
-                                            disabled={saving}
-                                          >
-                                            <i className="bi bi-trash"></i>
-                                          </button>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </>
-            )}
-
-            {/* Resumen del Presupuesto */}
-            {items.length > 0 && (
-              <div className="mt-3 p-3 bg-light rounded">
-                <div className="row">
-                  <div className="col-md-4">
-                    <strong>Presupuesto Total:</strong> ${presupuestoTotal.toLocaleString('es-CL')}
-                  </div>
-                  <div className="col-md-4">
-                    <strong>Total Asignado:</strong> ${totalAsignado.toLocaleString('es-CL')}
-                  </div>
-                  <div className="col-md-4">
-                    <strong className={saldoDisponible < 0 ? 'text-danger' : 'text-success'}>
-                      Saldo Disponible: ${saldoDisponible.toLocaleString('es-CL')}
-                    </strong>
-                  </div>
+        <div className="row">
+          <div className="col-12 grid-margin stretch-card">
+            <div className="card">
+              <div className="card-body">
+                <div className="d-flex justify-content-between align-items-center mb-4">
+                  <h4 className="card-title mb-0">
+                    <i className="mdi mdi-format-list-bulleted me-2"></i>
+                    Ítems Presupuestarios
+                  </h4>
+                  <button
+                    type="button"
+                    className="btn btn-gradient-primary"
+                    onClick={agregarItem}
+                    disabled={saving}
+                  >
+                    <i className="mdi mdi-plus-circle me-2"></i>
+                    Agregar Ítem
+                  </button>
                 </div>
+                {items.length === 0 ? (
+                  <p className="text-muted text-center py-3">
+                    No hay ítems presupuestarios. Haga clic en "Agregar Ítem" para comenzar.
+                  </p>
+                ) : (
+                  <>
+                    {items.map((item, itemIndex) => {
+                      const montoItem = parseFloat(item.monto_asignado_item) || 0;
+                      const montoSubitems = item.subitems.reduce((sum, subitem) => {
+                        return sum + (parseFloat(subitem.monto_asignado_subitem) || 0);
+                      }, 0);
+                      const montoTotalItem = montoSubitems > 0 ? montoSubitems : montoItem;
+                      const isExpanded = expandedItems.has(itemIndex);
+
+                      return (
+                        <div key={itemIndex} className="card mb-3">
+                          <div className="card-header bg-light">
+                            <div className="d-flex justify-content-between align-items-center">
+                              <div className="flex-grow-1">
+                                <input
+                                  type="text"
+                                  className={`form-control form-control-sm d-inline-block ${errors[`item_${itemIndex}_nombre`] ? 'is-invalid' : ''}`}
+                                  style={{ width: '300px' }}
+                                  placeholder="Nombre del ítem"
+                                  value={item.nombre_item_presupuesto}
+                                  onChange={(e) => actualizarItem(itemIndex, 'nombre_item_presupuesto', e.target.value)}
+                                  disabled={saving}
+                                />
+                                {errors[`item_${itemIndex}_nombre`] && (
+                                  <div className="invalid-feedback d-block">{errors[`item_${itemIndex}_nombre`]}</div>
+                                )}
+                              </div>
+                              <div className="d-flex gap-2 align-items-center">
+                                <span className="badge badge-gradient-info">
+                                  Total: ${montoTotalItem.toLocaleString('es-CL')}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-gradient-secondary"
+                                  onClick={() => toggleItem(itemIndex)}
+                                  disabled={saving}
+                                >
+                                  <i className={`mdi mdi-chevron-${isExpanded ? 'up' : 'down'}`}></i>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-gradient-danger"
+                                  onClick={() => eliminarItem(itemIndex)}
+                                  disabled={saving}
+                                >
+                                  <i className="mdi mdi-delete"></i>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          {isExpanded && (
+                            <div className="card-body">
+                              <div className="row mb-3">
+                                <div className="col-md-6">
+                                  <label className="form-label">Monto Asignado (CLP) <span className="text-danger">*</span></label>
+                                  <input
+                                    type="number"
+                                    className={`form-control ${errors[`item_${itemIndex}_monto`] ? 'is-invalid' : ''}`}
+                                    placeholder="0.00"
+                                    min="0"
+                                    step="0.01"
+                                    value={item.monto_asignado_item}
+                                    onChange={(e) => actualizarItem(itemIndex, 'monto_asignado_item', e.target.value)}
+                                    disabled={saving || item.subitems.length > 0}
+                                  />
+                                  {errors[`item_${itemIndex}_monto`] && (
+                                    <div className="invalid-feedback">{errors[`item_${itemIndex}_monto`]}</div>
+                                  )}
+                                  {item.subitems.length > 0 && (
+                                    <small className="form-text text-muted">
+                                      El monto se calcula automáticamente desde los subítems.
+                                    </small>
+                                  )}
+                                </div>
+                                <div className="col-md-6">
+                                  <label className="form-label">Categoría</label>
+                                  <input
+                                    type="text"
+                                    className="form-control"
+                                    placeholder="Ej: Materiales, Servicios, etc."
+                                    value={item.categoria_item}
+                                    onChange={(e) => actualizarItem(itemIndex, 'categoria_item', e.target.value)}
+                                    disabled={saving}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Subitems */}
+                              <div className="mb-3">
+                                <div className="d-flex justify-content-between align-items-center mb-2">
+                                  <h6 className="mb-0">Subítems</h6>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-gradient-primary"
+                                    onClick={() => agregarSubitem(itemIndex)}
+                                    disabled={saving}
+                                  >
+                                    <i className="mdi mdi-plus-circle me-1"></i>
+                                    Agregar Subítem
+                                  </button>
+                                </div>
+                                {item.subitems.length === 0 ? (
+                                  <p className="text-muted small">No hay subítems. Puede agregar subítems o usar el monto del ítem directamente.</p>
+                                ) : (
+                                  <div className="table-responsive">
+                                    <table className="table table-sm table-bordered">
+                                      <thead>
+                                        <tr>
+                                          <th>Nombre</th>
+                                          <th>Monto (CLP)</th>
+                                          <th>Categoría</th>
+                                          <th>Acciones</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {item.subitems.map((subitem, subitemIndex) => (
+                                          <tr key={subitemIndex}>
+                                            <td>
+                                              <input
+                                                type="text"
+                                                className={`form-control form-control-sm ${errors[`item_${itemIndex}_subitem_${subitemIndex}_nombre`] ? 'is-invalid' : ''}`}
+                                                placeholder="Nombre del subítem"
+                                                value={subitem.nombre_subitem_presupuesto}
+                                                onChange={(e) => actualizarSubitem(itemIndex, subitemIndex, 'nombre_subitem_presupuesto', e.target.value)}
+                                                disabled={saving}
+                                              />
+                                              {errors[`item_${itemIndex}_subitem_${subitemIndex}_nombre`] && (
+                                                <div className="invalid-feedback d-block">{errors[`item_${itemIndex}_subitem_${subitemIndex}_nombre`]}</div>
+                                              )}
+                                            </td>
+                                            <td>
+                                              <input
+                                                type="number"
+                                                className={`form-control form-control-sm ${errors[`item_${itemIndex}_subitem_${subitemIndex}_monto`] ? 'is-invalid' : ''}`}
+                                                placeholder="0.00"
+                                                min="0"
+                                                step="0.01"
+                                                value={subitem.monto_asignado_subitem}
+                                                onChange={(e) => actualizarSubitem(itemIndex, subitemIndex, 'monto_asignado_subitem', e.target.value)}
+                                                disabled={saving}
+                                              />
+                                              {errors[`item_${itemIndex}_subitem_${subitemIndex}_monto`] && (
+                                                <div className="invalid-feedback d-block">{errors[`item_${itemIndex}_subitem_${subitemIndex}_monto`]}</div>
+                                              )}
+                                            </td>
+                                            <td>
+                                              <input
+                                                type="text"
+                                                className="form-control form-control-sm"
+                                                placeholder="Categoría"
+                                                value={subitem.categoria_subitem}
+                                                onChange={(e) => actualizarSubitem(itemIndex, subitemIndex, 'categoria_subitem', e.target.value)}
+                                                disabled={saving}
+                                              />
+                                            </td>
+                                            <td>
+                                              <button
+                                                type="button"
+                                                className="btn btn-sm btn-gradient-danger"
+                                                onClick={() => eliminarSubitem(itemIndex, subitemIndex)}
+                                                disabled={saving}
+                                              >
+                                                <i className="mdi mdi-delete"></i>
+                                              </button>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+
+                {/* Resumen del Presupuesto */}
+                {items.length > 0 && (
+                  <div className="mt-3 p-3 bg-light rounded">
+                    <div className="row">
+                      <div className="col-md-4">
+                        <strong>Presupuesto Total:</strong> ${presupuestoTotal.toLocaleString('es-CL')}
+                      </div>
+                      <div className="col-md-4">
+                        <strong>Total Asignado:</strong> ${totalAsignado.toLocaleString('es-CL')}
+                      </div>
+                      <div className="col-md-4">
+                        <strong className={saldoDisponible < 0 ? 'text-danger' : 'text-success'}>
+                          Saldo Disponible: ${saldoDisponible.toLocaleString('es-CL')}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
 
         {/* Botones de acción */}
-        <div className="d-flex justify-content-end gap-2 mb-4">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => navigate(isEditMode ? `/proyecto/${id}` : '/')}
-            disabled={saving}
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={saving}
-          >
-            {saving ? (
-              <>
-                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                Guardando...
-              </>
-            ) : (
-              <>
-                <i className={`bi bi-${isEditMode ? 'check' : 'plus'}-circle me-2`}></i>
-                {isEditMode ? 'Guardar Cambios' : 'Crear Proyecto'}
-              </>
-            )}
-          </button>
+        <div className="row">
+          <div className="col-12">
+            <div className="d-flex justify-content-end gap-2 mb-4">
+              <button
+                type="button"
+                className="btn btn-gradient-secondary"
+                onClick={() => navigate(isEditMode ? `/proyecto/${id}` : '/')}
+                disabled={saving}
+              >
+                <i className="mdi mdi-close me-2"></i>
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="btn btn-gradient-primary"
+                disabled={saving}
+              >
+                {saving ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <i className={`mdi mdi-${isEditMode ? 'content-save' : 'plus-circle'} me-2`}></i>
+                    {isEditMode ? 'Guardar Cambios' : 'Crear Proyecto'}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       </form>
-    </div>
+    </>
   );
 };
-
 export default CreateEditProject;

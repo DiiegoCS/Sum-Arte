@@ -245,35 +245,41 @@ class ProyectoViewSet(viewsets.ModelViewSet):
         Returns:
             HttpResponse con el PDF generado
         """
+        import logging
         from django.http import HttpResponse
         from django.utils import timezone
         from rest_framework import status
         from rest_framework.response import Response
         from .reports import generar_reporte_rendicion_oficial_pdf
         
-        proyecto = self.get_object()
-        
-        # Valida permisos de organización
-        if not request.user.is_superuser:
-            if proyecto.id_organizacion != request.user.id_organizacion:
-                return Response(
-                    {'error': 'No tiene permiso para acceder a este proyecto.'},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-        
-        # Verificar que el proyecto esté cerrado/completado
-        if proyecto.estado_proyecto not in ['completado', 'cerrado']:
-            return Response(
-                {'error': 'El proyecto debe estar cerrado para generar el reporte oficial de rendición.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        logger = logging.getLogger(__name__)
         
         try:
+            proyecto = self.get_object()
+            
+            # Valida permisos de organización
+            if not request.user.is_superuser:
+                if proyecto.id_organizacion != request.user.id_organizacion:
+                    return Response(
+                        {'error': 'No tiene permiso para acceder a este proyecto.'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            
+            # Verificar que el proyecto esté cerrado/completado
+            if proyecto.estado_proyecto not in ['completado', 'cerrado']:
+                return Response(
+                    {'error': 'El proyecto debe estar cerrado o completado para generar el reporte oficial de rendición.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            logger.info(f"Generando reporte oficial de rendición para proyecto {proyecto.id}")
             buffer = generar_reporte_rendicion_oficial_pdf(proyecto)
             response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="reporte_rendicion_oficial_{proyecto.id}_{timezone.now().strftime("%Y%m%d")}.pdf"'
+            logger.info(f"Reporte oficial generado exitosamente para proyecto {proyecto.id}")
             return response
         except Exception as e:
+            logger.error(f"Error al generar reporte oficial para proyecto {pk}: {str(e)}", exc_info=True)
             return Response(
                 {'error': f'Error al generar el reporte: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -327,25 +333,30 @@ class ProyectoViewSet(viewsets.ModelViewSet):
         Returns:
             HttpResponse con el archivo generado
         """
+        import logging
         from django.http import HttpResponse
         from django.utils import timezone
         from rest_framework import status
         from rest_framework.response import Response
         from .reports import generar_reporte_estado_proyecto_pdf, generar_reporte_estado_proyecto_excel
         
-        proyecto = self.get_object()
-        
-        # Valida permisos de organización
-        if not request.user.is_superuser:
-            if proyecto.id_organizacion != request.user.id_organizacion:
-                return Response(
-                    {'error': 'No tiene permiso para acceder a este proyecto.'},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-        
-        formato = request.query_params.get('formato', 'pdf').lower()
+        logger = logging.getLogger(__name__)
         
         try:
+            proyecto = self.get_object()
+            
+            # Valida permisos de organización
+            if not request.user.is_superuser:
+                if proyecto.id_organizacion != request.user.id_organizacion:
+                    return Response(
+                        {'error': 'No tiene permiso para acceder a este proyecto.'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            
+            formato = request.query_params.get('formato', 'pdf').lower()
+            
+            logger.info(f"Generando reporte {formato} para proyecto {proyecto.id}")
+            
             if formato == 'excel':
                 buffer = generar_reporte_estado_proyecto_excel(proyecto)
                 response = HttpResponse(
@@ -358,8 +369,10 @@ class ProyectoViewSet(viewsets.ModelViewSet):
                 response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
                 response['Content-Disposition'] = f'attachment; filename="reporte_estado_{proyecto.id}_{timezone.now().strftime("%Y%m%d")}.pdf"'
             
+            logger.info(f"Reporte {formato} generado exitosamente para proyecto {proyecto.id}")
             return response
         except Exception as e:
+            logger.error(f"Error al generar reporte para proyecto {pk}: {str(e)}", exc_info=True)
             return Response(
                 {'error': f'Error al generar el reporte: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

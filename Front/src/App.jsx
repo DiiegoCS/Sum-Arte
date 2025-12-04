@@ -1,7 +1,14 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import Navbar from './components/Navbar';
+import Layout from './components/Layout';
+// Purple Admin Template Styles
+import './assets/vendors/mdi/css/materialdesignicons.min.css';
+import './assets/vendors/ti-icons/css/themify-icons.css';
+import './assets/vendors/css/vendor.bundle.base.css';
+import './assets/vendors/font-awesome/css/font-awesome.min.css';
+import './assets/css/purple-admin.css';
+// Custom App Styles
 import './App.css';
 import Dashboard from './pages/Dashboard';
 import ProjectDetails from './pages/ProjectDetails';
@@ -31,10 +38,9 @@ function App() {
               path="/crear-organizacion"
               element={
                 <ProtectedRoute>
-                  <>
-                    <Navbar />
+                  <Layout>
                     <CreateOrganization />
-                  </>
+                  </Layout>
                 </ProtectedRoute>
               }
             />
@@ -42,10 +48,9 @@ function App() {
               path="/invitar-usuario"
               element={
                 <ProtectedRoute>
-                  <>
-                    <Navbar />
+                  <Layout>
                     <InviteUser />
-                  </>
+                  </Layout>
                 </ProtectedRoute>
               }
             />
@@ -53,10 +58,9 @@ function App() {
               path="/proyecto/:id/equipo"
               element={
                 <ProtectedRoute>
-                  <>
-                    <Navbar />
+                  <Layout>
                     <ProjectTeam />
-                  </>
+                  </Layout>
                 </ProtectedRoute>
               }
             />
@@ -64,10 +68,9 @@ function App() {
               path="/crear-proyecto"
               element={
                 <ProtectedRoute>
-                  <>
-                    <Navbar />
+                  <Layout>
                     <CreateEditProject />
-                  </>
+                  </Layout>
                 </ProtectedRoute>
               }
             />
@@ -75,10 +78,9 @@ function App() {
               path="/proyecto/:id/editar"
               element={
                 <ProtectedRoute>
-                  <>
-                    <Navbar />
+                  <Layout>
                     <CreateEditProject />
-                  </>
+                  </Layout>
                 </ProtectedRoute>
               }
             />
@@ -86,10 +88,9 @@ function App() {
               path="/mi-perfil"
               element={
                 <ProtectedRoute>
-                  <>
-                    <Navbar />
+                  <Layout>
                     <UserProfile />
-                  </>
+                  </Layout>
                 </ProtectedRoute>
               }
             />
@@ -99,10 +100,9 @@ function App() {
               path="/"
               element={
                 <ProtectedRoute>
-                  <>
-                    <Navbar />
+                  <Layout>
                     <Dashboard />
-                  </>
+                  </Layout>
                 </ProtectedRoute>
               }
             />
@@ -110,10 +110,9 @@ function App() {
               path="/proyecto/:id"
               element={
                 <ProtectedRoute>
-                  <>
-                    <Navbar />
+                  <Layout>
                     <ProjectDetails />
-                  </>
+                  </Layout>
                 </ProtectedRoute>
               }
             />
@@ -121,10 +120,9 @@ function App() {
               path="/registrar-gasto"
               element={
                 <ProtectedRoute>
-                  <>
-                    <Navbar />
+                  <Layout>
                     <RegisterExpense />
-                  </>
+                  </Layout>
                 </ProtectedRoute>
               }
             />
@@ -132,10 +130,9 @@ function App() {
               path="/proyecto/:id/pre-rendicion"
               element={
                 <ProtectedRoute>
-                  <>
-                    <Navbar />
+                  <Layout>
                     <PreRendicion />
-                  </>
+                  </Layout>
                 </ProtectedRoute>
               }
             />
@@ -143,10 +140,9 @@ function App() {
               path="/proyecto/:id/cerrar-rendicion"
               element={
                 <ProtectedRoute>
-                  <>
-                    <Navbar />
+                  <Layout>
                     <CerrarRendicion />
-                  </>
+                  </Layout>
                 </ProtectedRoute>
               }
             />

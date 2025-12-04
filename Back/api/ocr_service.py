@@ -351,9 +351,10 @@ IMPORTANTE:
             'factura': 'factura electrónica',
             'factura electrónica': 'factura electrónica',
             'factura electronica': 'factura electrónica',
-            'boleta': 'boleta',
-            'boleta electrónica': 'boleta',
-            'boleta electronica': 'boleta',
+            'boleta': 'boleta electronica',
+            'boleta electrónica': 'boleta electronica',
+            'boleta electronica': 'boleta electronica',
+            'boleta de compra': 'boleta electronica',  # Mantener compatibilidad con valor antiguo
             'recibo': 'recibo',
             'nota de crédito': 'nota de crédito',
             'nota de debito': 'nota de débito',

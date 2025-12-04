@@ -21,6 +21,7 @@ const RegisterExpense = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const transaccionIdEditar = searchParams.get('editar');
+  const proyectoIdParam = searchParams.get('proyecto');
 
   // Estado del formulario
   const [proyectos, setProyectos] = useState([]);
@@ -63,7 +64,7 @@ const RegisterExpense = () => {
     if (transaccionIdEditar) {
       cargarTransaccionParaEditar(transaccionIdEditar);
     }
-  }, [transaccionIdEditar]);
+  }, [transaccionIdEditar, proyectoIdParam]);
 
   useEffect(() => {
     if (formData.proyecto) {
@@ -88,8 +89,17 @@ const RegisterExpense = () => {
       ]);
       
       // Asegurar que sean arrays
-      setProyectos(Array.isArray(proyectosData) ? proyectosData : []);
+      const proyectosList = Array.isArray(proyectosData) ? proyectosData : [];
+      setProyectos(proyectosList);
       setProveedores(Array.isArray(proveedoresData) ? proveedoresData : []);
+      
+      // Si hay un parámetro de proyecto en la URL, pre-seleccionarlo
+      if (proyectoIdParam && proyectosList.length > 0) {
+        const proyectoEncontrado = proyectosList.find(p => p.id === parseInt(proyectoIdParam));
+        if (proyectoEncontrado) {
+          setFormData(prev => ({ ...prev, proyecto: proyectoIdParam }));
+        }
+      }
     } catch (error) {
       toast.error('Ha ocurrido un error al cargar los datos iniciales');
       console.error('Error al cargar datos iniciales:', error);
@@ -422,27 +432,44 @@ const RegisterExpense = () => {
 
   if (cargandoTransaccion) {
     return (
-      <div className="container mt-4">
-        <div className="d-flex justify-content-center">
-          <div className="spinner-border" role="status">
-            <span className="visually-hidden">Cargando transacción...</span>
-          </div>
+      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Cargando transacción...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mt-4">
+    <>
       <ToastContainer position="top-right" autoClose={3000} />
 
-      <div className="row justify-content-center">
-        <div className="col-md-10 col-lg-12">
-          <div className="card shadow-sm">
+      {/* Page Header estilo template */}
+      <div className="page-header">
+        <div>
+          <h3 className="page-title">
+            <span className="page-title-icon bg-gradient-primary text-white me-2">
+              <i className="mdi mdi-cash"></i>
+            </span>
+            {modoEdicion ? 'Editar transacción' : 'Registrar nuevo gasto'}
+          </h3>
+          <nav aria-label="breadcrumb">
+            <ul className="breadcrumb">
+              <li className="breadcrumb-item">
+                <a href="/" className="text-decoration-none">Dashboard</a>
+              </li>
+              <li className="breadcrumb-item active" aria-current="page">
+                {modoEdicion ? 'Editar transacción' : 'Registrar gasto'}
+              </li>
+            </ul>
+          </nav>
+        </div>
+      </div>
+
+      <div className="row">
+        <div className="col-12 grid-margin stretch-card">
+          <div className="card">
             <div className="card-body">
-              <h1 className="card-title text-center mb-4">
-                {modoEdicion ? 'Editar transacción' : 'Registrar nuevo gasto'}
-              </h1>
 
               <form onSubmit={handleSubmit}>
                 {/* Selección de proyecto */}
@@ -608,7 +635,7 @@ const RegisterExpense = () => {
                     >
                       <option value="factura electrónica">Factura electrónica</option>
                       <option value="factura exenta">Factura exenta</option>
-                      <option value="boleta de compra">Boleta de compra</option>
+                      <option value="boleta electronica">Boleta electrónica</option>
                       <option value="boleta de honorarios">Boleta de honorarios</option>
                     </select>
                   </div>
@@ -733,7 +760,7 @@ const RegisterExpense = () => {
                     {evidencias.length > 0 && (
                       <button
                         type="button"
-                        className="btn btn-outline-primary"
+                        className="btn btn-gradient-primary"
                         onClick={handleProcessOCR}
                         disabled={procesandoOCR || !evidencias[0]?.type?.match(/^(image\/(jpeg|jpg|png)|application\/pdf)$/)}
                         title="Leer información del documento automáticamente con OCR"
@@ -745,7 +772,7 @@ const RegisterExpense = () => {
                           </>
                         ) : (
                           <>
-                            <i className="bi bi-eye me-2"></i>
+                            <i className="mdi mdi-eye me-2"></i>
                             Leer con OCR
                           </>
                         )}
@@ -793,7 +820,7 @@ const RegisterExpense = () => {
                           <li key={index}>
                             {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
                             {file.type.match(/^(image\/(jpeg|jpg|png)|application\/pdf)$/) && (
-                              <span className="badge bg-info ms-2">OCR disponible</span>
+                              <span className="badge badge-gradient-info ms-2">OCR disponible</span>
                             )}
                           </li>
                         ))}
@@ -806,7 +833,7 @@ const RegisterExpense = () => {
                 <div className="d-flex justify-content-end gap-2 mt-4">
                   <button
                     type="button"
-                    className="btn btn-secondary"
+                    className="btn btn-gradient-secondary"
                     onClick={() => {
                       if (modoEdicion && formData.proyecto) {
                         navigate(`/proyecto/${formData.proyecto}`);
@@ -816,17 +843,25 @@ const RegisterExpense = () => {
                     }}
                     disabled={loading || cargandoTransaccion}
                   >
+                    <i className="mdi mdi-close me-2"></i>
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    className="btn btn-primary"
+                    className="btn btn-gradient-primary"
                     disabled={loading || cargandoTransaccion}
                   >
-                    {loading 
-                      ? (modoEdicion ? 'Actualizando...' : 'Guardando...') 
-                      : (modoEdicion ? 'Actualizar transacción' : 'Guardar gasto')
-                    }
+                    {loading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                        {modoEdicion ? 'Actualizando...' : 'Guardando...'}
+                      </>
+                    ) : (
+                      <>
+                        <i className="mdi mdi-content-save me-2"></i>
+                        {modoEdicion ? 'Actualizar transacción' : 'Guardar gasto'}
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -834,7 +869,7 @@ const RegisterExpense = () => {
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
