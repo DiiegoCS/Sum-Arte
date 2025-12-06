@@ -6,22 +6,24 @@ con la autenticación y autorización adecuadas configuradas.
 """
 
 from django.shortcuts import render
-from rest_framework import viewsets
+from django.http import FileResponse
+from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.decorators import action
+from rest_framework.response import Response
 from .models import (Proyecto, Organizacion, Usuario, Rol, Usuario_Rol_Proyecto, Proveedor, Transaccion,
                      Item_Presupuestario, Subitem_Presupuestario, Evidencia, Transaccion_Evidencia, Log_transaccion,
-                     InvitacionUsuario)
+                     InvitacionUsuario, InformeGenerado)
 from .serializers import (ProyectoSerializer, OrganizacionSerializer,UsuarioSerializer, UsuarioRolProyectoSerializer, ProveedorSerializer, 
                           TransaccionSerializer, EvidenciaSerializer, TransaccionEvidenciaSerializer,
                           LogTransaccionSerializer, ItemPresupuestarioSerializer, SubitemPresupuestarioSerializer, 
                           RolSerializer, InvitacionUsuarioSerializer, AceptarInvitacionSerializer,
                           EquipoProyectoSerializer, AgregarUsuarioEquipoSerializer, CambiarRolEquipoSerializer,
-                          PerfilUsuarioSerializer)
+                          PerfilUsuarioSerializer, InformeGeneradoSerializer)
 from .permissions import (IsOrganizationMember, IsAdminProyecto, IsEjecutor, 
                          IsAdminProyectoOrEjecutor, CanApproveTransaction, CanCreateTransaction,
                          IsAdminProyectoEnOrganizacion, CanEditDeleteTransaction)
-from .utils import validar_rut_chileno
+from .utils import validar_rut_chileno, obtener_organizacion_usuario, tiene_acceso_completo, puede_crear_organizacion
 
 class OrganizacionViewSet(viewsets.ModelViewSet):
     """
@@ -37,10 +39,11 @@ class OrganizacionViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filtra las organizaciones según la organización del usuario."""
-        if self.request.user.is_superuser:
+        organizacion = obtener_organizacion_usuario(self.request.user)
+        if tiene_acceso_completo(self.request.user):
             return Organizacion.objects.all()
-        if self.request.user.id_organizacion:
-            return Organizacion.objects.filter(id=self.request.user.id_organizacion.id)
+        if organizacion:
+            return Organizacion.objects.filter(id=organizacion.id)
         # Usuarios sin organización pueden ver todas (para seleccionar al crear)
         return Organizacion.objects.all()
     
@@ -48,12 +51,12 @@ class OrganizacionViewSet(viewsets.ModelViewSet):
         """
         Permisos dinámicos según la acción.
         
-        - create: Cualquier usuario autenticado puede crear (si no tiene organización)
+        - create: Usuarios principales o usuarios sin organización pueden crear
         - list/retrieve: Usuarios pueden ver su organización o todas si no tienen una
         - update/partial_update/delete: Solo si pertenece a la organización o es superusuario
         """
         if self.action == 'create':
-            # Permitir crear a cualquier usuario autenticado
+            # Permitir crear a usuarios principales o usuarios sin organización
             return [IsAuthenticated()]
         elif self.action in ['update', 'partial_update', 'destroy']:
             # Para editar/eliminar, verificar que pertenezca a la organización
@@ -65,9 +68,18 @@ class OrganizacionViewSet(viewsets.ModelViewSet):
         """
         Crea la organización y asigna el estado inicial.
         
-        Si el usuario no tiene organización, se le asigna automáticamente.
+        Si el usuario no tiene organización (especialmente usuarios principales),
+        se le asigna automáticamente la organización recién creada.
         """
         from django.utils import timezone
+        from rest_framework.exceptions import PermissionDenied
+        
+        # Verificar que el usuario pueda crear una organización
+        if not puede_crear_organizacion(self.request.user):
+            raise PermissionDenied(
+                'No tiene permiso para crear una organización. '
+                'Solo usuarios principales o superusuarios sin organización pueden crear organizaciones.'
+            )
         
         # Establecer estado inicial de suscripción
         organizacion = serializer.save(
@@ -75,8 +87,10 @@ class OrganizacionViewSet(viewsets.ModelViewSet):
         )
         
         # Si el usuario no tiene organización, asignarle la recién creada
+        # Esto aplica especialmente para usuarios principales
         if not self.request.user.id_organizacion:
             self.request.user.id_organizacion = organizacion
+            # Si es usuario principal, mantener el flag (puede ser útil para auditoría)
             self.request.user.save()
     
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
@@ -161,37 +175,56 @@ class ProyectoViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filtra los proyectos según la organización del usuario."""
-        usuario = self.request.user
-        if usuario.is_superuser:
+        organizacion = obtener_organizacion_usuario(self.request.user)
+        if tiene_acceso_completo(self.request.user):
             return Proyecto.objects.all()
+        elif organizacion:
+            return Proyecto.objects.filter(id_organizacion=organizacion)
         else:
-            return Proyecto.objects.filter(id_organizacion=self.request.user.id_organizacion)
+            return Proyecto.objects.none()
     
     def perform_create(self, serializer):
         """
         Asigna automáticamente la organización del usuario al crear el proyecto.
+        Si el usuario es principal, también se le asigna automáticamente el rol de administrador de proyecto.
         """
-        if not self.request.user.is_superuser:
-            # Usuarios normales: asignar automáticamente su organización
-            if not hasattr(self.request.user, 'id_organizacion') or not self.request.user.id_organizacion:
+        organizacion = obtener_organizacion_usuario(self.request.user)
+        usuario_principal = getattr(self.request.user, 'usuario_principal', False)
+        
+        if tiene_acceso_completo(self.request.user):
+            # Superusuarios sin organización: pueden proporcionar la organización
+            if 'id_organizacion' not in serializer.validated_data:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({
+                    'id_organizacion': 'Debe proporcionar una organización para crear el proyecto.'
+                })
+            proyecto = serializer.save()
+        else:
+            # Usuarios normales, superusuarios con organización, o usuarios principales: asignar automáticamente su organización
+            if not organizacion:
                 from rest_framework.exceptions import ValidationError
                 raise ValidationError({
                     'id_organizacion': 'El usuario no tiene una organización asignada.'
                 })
-            serializer.save(id_organizacion=self.request.user.id_organizacion)
-        else:
-            # Superusuarios: pueden proporcionar la organización o se asigna automáticamente
-            if 'id_organizacion' not in serializer.validated_data:
-                # Si no se proporcionó, intentar usar la del usuario si existe
-                if hasattr(self.request.user, 'id_organizacion') and self.request.user.id_organizacion:
-                    serializer.save(id_organizacion=self.request.user.id_organizacion)
-                else:
-                    from rest_framework.exceptions import ValidationError
-                    raise ValidationError({
-                        'id_organizacion': 'Debe proporcionar una organización para crear el proyecto.'
-                    })
-            else:
-                serializer.save()
+            proyecto = serializer.save(id_organizacion=organizacion)
+        
+        # Si el usuario es principal, asignarle automáticamente el rol de administrador de proyecto
+        # Esto permite que pueda gestionar el primer proyecto de la organización
+        if usuario_principal:
+            from .models import Rol, Usuario_Rol_Proyecto, ROL_ADMIN_PRYECTO
+            try:
+                # Obtener el rol de administrador de proyecto
+                rol_admin = Rol.objects.get(nombre_rol=ROL_ADMIN_PRYECTO)
+                # Crear la asignación de rol si no existe
+                Usuario_Rol_Proyecto.objects.get_or_create(
+                    usuario=self.request.user,
+                    rol=rol_admin,
+                    proyecto=proyecto,
+                    defaults={}
+                )
+            except Rol.DoesNotExist:
+                # Si el rol no existe, no es crítico, pero debería existir
+                pass
     
     @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, IsOrganizationMember])
     def pre_rendicion(self, request, pk=None):
@@ -207,8 +240,9 @@ class ProyectoViewSet(viewsets.ModelViewSet):
         proyecto = self.get_object()
         
         # Valida permisos de organización
-        if not request.user.is_superuser:
-            if proyecto.id_organizacion != request.user.id_organizacion:
+        organizacion = obtener_organizacion_usuario(request.user)
+        if not tiene_acceso_completo(request.user):
+            if proyecto.id_organizacion != organizacion:
                 return Response(
                     {'error': 'No tiene permiso para acceder a este proyecto.'},
                     status=status.HTTP_403_FORBIDDEN
@@ -216,6 +250,14 @@ class ProyectoViewSet(viewsets.ModelViewSet):
         
         try:
             resultado = RenditionService.generar_pre_rendicion(proyecto)
+            
+            # Asegurar que errores y advertencias sean listas
+            if 'errores' not in resultado or not isinstance(resultado['errores'], list):
+                resultado['errores'] = []
+            if 'advertencias' not in resultado or not isinstance(resultado['advertencias'], list):
+                resultado['advertencias'] = []
+            if 'valido' not in resultado:
+                resultado['valido'] = len(resultado['errores']) == 0
             
             # Obtener información adicional para el frontend
             from .models import Transaccion
@@ -227,6 +269,11 @@ class ProyectoViewSet(viewsets.ModelViewSet):
                 'aprobadas': transacciones.filter(estado_transaccion='aprobado').count(),
                 'rechazadas': transacciones.filter(estado_transaccion='rechazado').count(),
             }
+            
+            # Debug log
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Pre-rendición para proyecto {proyecto.id}: errores={resultado['errores']}, advertencias={resultado['advertencias']}, valido={resultado['valido']}")
             
             return Response(resultado, status=status.HTTP_200_OK)
         except Exception as e:
@@ -258,8 +305,9 @@ class ProyectoViewSet(viewsets.ModelViewSet):
             proyecto = self.get_object()
             
             # Valida permisos de organización
-            if not request.user.is_superuser:
-                if proyecto.id_organizacion != request.user.id_organizacion:
+            organizacion = obtener_organizacion_usuario(request.user)
+            if not tiene_acceso_completo(request.user):
+                if proyecto.id_organizacion != organizacion:
                     return Response(
                         {'error': 'No tiene permiso para acceder a este proyecto.'},
                         status=status.HTTP_403_FORBIDDEN
@@ -299,8 +347,9 @@ class ProyectoViewSet(viewsets.ModelViewSet):
         proyecto = self.get_object()
         
         # Valida permisos de organización
-        if not request.user.is_superuser:
-            if proyecto.id_organizacion != request.user.id_organizacion:
+        organizacion = obtener_organizacion_usuario(request.user)
+        if not tiene_acceso_completo(request.user):
+            if proyecto.id_organizacion != organizacion:
                 return Response(
                     {'error': 'No tiene permiso para acceder a este proyecto.'},
                     status=status.HTTP_403_FORBIDDEN
@@ -346,28 +395,52 @@ class ProyectoViewSet(viewsets.ModelViewSet):
             proyecto = self.get_object()
             
             # Valida permisos de organización
-            if not request.user.is_superuser:
-                if proyecto.id_organizacion != request.user.id_organizacion:
+            organizacion = obtener_organizacion_usuario(request.user)
+            if not tiene_acceso_completo(request.user):
+                if proyecto.id_organizacion != organizacion:
                     return Response(
                         {'error': 'No tiene permiso para acceder a este proyecto.'},
                         status=status.HTTP_403_FORBIDDEN
                     )
             
             formato = request.query_params.get('formato', 'pdf').lower()
+            guardar = request.query_params.get('guardar', 'true').lower() == 'true'
             
             logger.info(f"Generando reporte {formato} para proyecto {proyecto.id}")
             
             if formato == 'excel':
                 buffer = generar_reporte_estado_proyecto_excel(proyecto)
-                response = HttpResponse(
-                    buffer.getvalue(),
-                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                )
-                response['Content-Disposition'] = f'attachment; filename="reporte_estado_{proyecto.id}_{timezone.now().strftime("%Y%m%d")}.xlsx"'
+                content_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                extension = 'xlsx'
             else:  # PDF por defecto
                 buffer = generar_reporte_estado_proyecto_pdf(proyecto)
-                response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
-                response['Content-Disposition'] = f'attachment; filename="reporte_estado_{proyecto.id}_{timezone.now().strftime("%Y%m%d")}.pdf"'
+                content_type = 'application/pdf'
+                extension = 'pdf'
+            
+            # Guardar el informe en la base de datos si se solicita
+            if guardar:
+                from .models import InformeGenerado
+                from django.core.files.base import ContentFile
+                
+                nombre_archivo = f"reporte_estado_{proyecto.id}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.{extension}"
+                contenido_archivo = buffer.getvalue()
+                
+                informe = InformeGenerado.objects.create(
+                    proyecto=proyecto,
+                    tipo_informe='estado',
+                    formato=formato,
+                    nombre_archivo=nombre_archivo,
+                    generado_por=request.user,
+                    descripcion=f"Reporte de estado del proyecto {proyecto.nombre_proyecto}",
+                    tamaño_archivo=len(contenido_archivo)
+                )
+                
+                # Guardar el archivo
+                informe.archivo.save(nombre_archivo, ContentFile(contenido_archivo), save=True)
+                logger.info(f"Informe guardado con ID {informe.id} para proyecto {proyecto.id}")
+            
+            response = HttpResponse(buffer.getvalue(), content_type=content_type)
+            response['Content-Disposition'] = f'attachment; filename="reporte_estado_{proyecto.id}_{timezone.now().strftime("%Y%m%d")}.{extension}"'
             
             logger.info(f"Reporte {formato} generado exitosamente para proyecto {proyecto.id}")
             return response
@@ -393,8 +466,9 @@ class ProyectoViewSet(viewsets.ModelViewSet):
         proyecto = self.get_object()
         
         # Valida permisos de organización
-        if not request.user.is_superuser:
-            if proyecto.id_organizacion != request.user.id_organizacion:
+        organizacion = obtener_organizacion_usuario(request.user)
+        if not tiene_acceso_completo(request.user):
+            if proyecto.id_organizacion != organizacion:
                 return Response(
                     {'error': 'No tiene permiso para acceder a este proyecto.'},
                     status=status.HTTP_403_FORBIDDEN
@@ -444,8 +518,9 @@ class ProyectoViewSet(viewsets.ModelViewSet):
         proyecto = self.get_object()
         
         # Valida permisos de organización
-        if not request.user.is_superuser:
-            if proyecto.id_organizacion != request.user.id_organizacion:
+        organizacion = obtener_organizacion_usuario(request.user)
+        if not tiene_acceso_completo(request.user):
+            if proyecto.id_organizacion != organizacion:
                 return Response(
                     {'error': 'No tiene permiso para acceder a este proyecto.'},
                     status=status.HTTP_403_FORBIDDEN
@@ -468,8 +543,9 @@ class ProyectoViewSet(viewsets.ModelViewSet):
         rol = Rol.objects.get(id=rol_id)
         
         # Verificar que el usuario pertenezca a la misma organización
-        if not request.user.is_superuser:
-            if usuario.id_organizacion != proyecto.id_organizacion:
+        organizacion = obtener_organizacion_usuario(request.user)
+        if not tiene_acceso_completo(request.user):
+            if usuario.id_organizacion != organizacion:
                 return Response(
                     {'error': 'El usuario debe pertenecer a la misma organización que el proyecto.'},
                     status=status.HTTP_400_BAD_REQUEST
@@ -512,8 +588,9 @@ class ProyectoViewSet(viewsets.ModelViewSet):
         proyecto = self.get_object()
         
         # Valida permisos de organización
-        if not request.user.is_superuser:
-            if proyecto.id_organizacion != request.user.id_organizacion:
+        organizacion = obtener_organizacion_usuario(request.user)
+        if not tiene_acceso_completo(request.user):
+            if proyecto.id_organizacion != organizacion:
                 return Response(
                     {'error': 'No tiene permiso para acceder a este proyecto.'},
                     status=status.HTTP_403_FORBIDDEN
@@ -528,8 +605,9 @@ class ProyectoViewSet(viewsets.ModelViewSet):
             )
         
         # Verificar que el usuario pertenezca a la misma organización
-        if not request.user.is_superuser:
-            if usuario.id_organizacion != proyecto.id_organizacion:
+        organizacion = obtener_organizacion_usuario(request.user)
+        if not tiene_acceso_completo(request.user):
+            if usuario.id_organizacion != organizacion:
                 return Response(
                     {'error': 'El usuario no pertenece a la organización del proyecto.'},
                     status=status.HTTP_400_BAD_REQUEST
@@ -585,8 +663,9 @@ class ProyectoViewSet(viewsets.ModelViewSet):
         proyecto = self.get_object()
         
         # Valida permisos de organización
-        if not request.user.is_superuser:
-            if proyecto.id_organizacion != request.user.id_organizacion:
+        organizacion = obtener_organizacion_usuario(request.user)
+        if not tiene_acceso_completo(request.user):
+            if proyecto.id_organizacion != organizacion:
                 return Response(
                     {'error': 'No tiene permiso para acceder a este proyecto.'},
                     status=status.HTTP_403_FORBIDDEN
@@ -610,8 +689,9 @@ class ProyectoViewSet(viewsets.ModelViewSet):
         nuevo_rol = Rol.objects.get(id=rol_id)
         
         # Verificar que el usuario pertenezca a la misma organización
-        if not request.user.is_superuser:
-            if usuario.id_organizacion != proyecto.id_organizacion:
+        organizacion = obtener_organizacion_usuario(request.user)
+        if not tiene_acceso_completo(request.user):
+            if usuario.id_organizacion != organizacion:
                 return Response(
                     {'error': 'El usuario no pertenece a la organización del proyecto.'},
                     status=status.HTTP_400_BAD_REQUEST
@@ -672,10 +752,11 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filtra los usuarios según la organización del usuario."""
-        if self.request.user.is_superuser:
+        organizacion = obtener_organizacion_usuario(self.request.user)
+        if tiene_acceso_completo(self.request.user):
             return Usuario.objects.all()
-        if self.request.user.id_organizacion:
-            return Usuario.objects.filter(id_organizacion=self.request.user.id_organizacion)
+        if organizacion:
+            return Usuario.objects.filter(id_organizacion=organizacion)
         return Usuario.objects.filter(id=self.request.user.id)
     
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
@@ -815,12 +896,11 @@ class InvitacionUsuarioViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filtra las invitaciones según la organización del usuario."""
-        if self.request.user.is_superuser:
+        organizacion = obtener_organizacion_usuario(self.request.user)
+        if tiene_acceso_completo(self.request.user):
             return InvitacionUsuario.objects.all()
-        if self.request.user.id_organizacion:
-            return InvitacionUsuario.objects.filter(
-                organizacion=self.request.user.id_organizacion
-            )
+        if organizacion:
+            return InvitacionUsuario.objects.filter(organizacion=organizacion)
         return InvitacionUsuario.objects.none()
     
     def get_serializer_context(self):
@@ -857,8 +937,9 @@ class InvitacionUsuarioViewSet(viewsets.ModelViewSet):
         invitacion = self.get_object()
         
         # Verificar permisos
-        if not request.user.is_superuser:
-            if invitacion.organizacion != request.user.id_organizacion:
+        organizacion = obtener_organizacion_usuario(request.user)
+        if not tiene_acceso_completo(request.user):
+            if invitacion.organizacion != organizacion:
                 return Response(
                     {'error': 'No tiene permiso para reenviar esta invitación.'},
                     status=status.HTTP_403_FORBIDDEN
@@ -893,8 +974,9 @@ class InvitacionUsuarioViewSet(viewsets.ModelViewSet):
         invitacion = self.get_object()
         
         # Verificar permisos
-        if not request.user.is_superuser:
-            if invitacion.organizacion != request.user.id_organizacion:
+        organizacion = obtener_organizacion_usuario(request.user)
+        if not tiene_acceso_completo(request.user):
+            if invitacion.organizacion != organizacion:
                 return Response(
                     {'error': 'No tiene permiso para cancelar esta invitación.'},
                     status=status.HTTP_403_FORBIDDEN
@@ -990,12 +1072,13 @@ class TransaccionViewSet(viewsets.ModelViewSet):
             'log_transaccion_set__usuario'
         )
         
-        if self.request.user.is_superuser:
+        organizacion = obtener_organizacion_usuario(self.request.user)
+        if tiene_acceso_completo(self.request.user):
             return queryset
         # Filtra por organización mediante los proyectos asociados
-        return queryset.filter(
-            proyecto__id_organizacion=self.request.user.id_organizacion
-        )
+        if organizacion:
+            return queryset.filter(proyecto__id_organizacion=organizacion)
+        return queryset.none()
     
     def get_serializer_context(self):
         """Agrega el request al contexto del serializador."""
@@ -1304,10 +1387,12 @@ class EvidenciaViewSet(viewsets.ModelViewSet):
         queryset = Evidencia.objects.all()
         
         # Filtra por organización
-        if not self.request.user.is_superuser:
-            queryset = queryset.filter(
-                proyecto__id_organizacion=self.request.user.id_organizacion
-            )
+        organizacion = obtener_organizacion_usuario(self.request.user)
+        if not tiene_acceso_completo(self.request.user):
+            if organizacion:
+                queryset = queryset.filter(proyecto__id_organizacion=organizacion)
+            else:
+                queryset = queryset.none()
         
         # Por defecto, excluye evidencias eliminadas (soft delete)
         # Se puede incluir con ?incluir_eliminadas=true
@@ -1571,12 +1656,15 @@ class LogTransaccionViewSet(viewsets.ReadOnlyModelViewSet):
             'transaccion', 'usuario', 'transaccion__proyecto'
         )
         
-        if self.request.user.is_superuser:
+        organizacion = obtener_organizacion_usuario(self.request.user)
+        if tiene_acceso_completo(self.request.user):
             queryset = queryset.all()
-        else:
+        elif organizacion:
             queryset = queryset.filter(
-                transaccion__proyecto__id_organizacion=self.request.user.id_organizacion
+                transaccion__proyecto__id_organizacion=organizacion
             )
+        else:
+            queryset = queryset.none()
         
         # Filtro adicional por proyecto si se especifica
         proyecto_id = self.request.query_params.get('proyecto', None)
@@ -1612,8 +1700,9 @@ class LogTransaccionViewSet(viewsets.ReadOnlyModelViewSet):
             from .models import Transaccion
             transaccion = Transaccion.objects.get(id=transaccion_id)
             
-            if not request.user.is_superuser:
-                if transaccion.proyecto.id_organizacion != request.user.id_organizacion:
+            organizacion = obtener_organizacion_usuario(request.user)
+            if not tiene_acceso_completo(request.user):
+                if transaccion.proyecto.id_organizacion != organizacion:
                     return Response(
                         {'error': 'No tiene permiso para acceder a esta transacción.'},
                         status=status.HTTP_403_FORBIDDEN
@@ -1650,10 +1739,12 @@ class ItemPresupuestarioViewSet(viewsets.ModelViewSet):
         ).all()
         
         # Filtra por organización
-        if not self.request.user.is_superuser:
-            queryset = queryset.filter(
-                proyecto__id_organizacion=self.request.user.id_organizacion
-            )
+        organizacion = obtener_organizacion_usuario(self.request.user)
+        if not tiene_acceso_completo(self.request.user):
+            if organizacion:
+                queryset = queryset.filter(proyecto__id_organizacion=organizacion)
+            else:
+                queryset = queryset.none()
         
         # Filtra por proyecto si se indica
         proyecto_id = self.request.query_params.get('proyecto')
@@ -1675,11 +1766,15 @@ class SubitemPresupuestarioViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filtra los subítems según la organización del usuario."""
-        if self.request.user.is_superuser:
+        organizacion = obtener_organizacion_usuario(self.request.user)
+        if tiene_acceso_completo(self.request.user):
             return Subitem_Presupuestario.objects.all()
-        return Subitem_Presupuestario.objects.filter(
-            item_presupuesto__proyecto__id_organizacion=self.request.user.id_organizacion
-        )
+        elif organizacion:
+            return Subitem_Presupuestario.objects.filter(
+                item_presupuesto__proyecto__id_organizacion=organizacion
+            )
+        else:
+            return Subitem_Presupuestario.objects.none()
 
 
 class DashboardViewSet(viewsets.ViewSet):
@@ -1707,12 +1802,13 @@ class DashboardViewSet(viewsets.ViewSet):
         from .models import Proyecto, Transaccion
         
         # Obtiene los proyectos del usuario
-        if request.user.is_superuser:
+        organizacion = obtener_organizacion_usuario(request.user)
+        if tiene_acceso_completo(request.user):
             proyectos = Proyecto.objects.all()
+        elif organizacion:
+            proyectos = Proyecto.objects.filter(id_organizacion=organizacion)
         else:
-            proyectos = Proyecto.objects.filter(
-                id_organizacion=request.user.id_organizacion
-            )
+            proyectos = Proyecto.objects.none()
         
         # Calcula las métricas generales
         total_presupuesto = sum(p.presupuesto_total for p in proyectos)
@@ -1785,8 +1881,9 @@ class DashboardViewSet(viewsets.ViewSet):
             proyecto = Proyecto.objects.get(id=proyecto_id)
             
             # Valida los permisos
-            if not request.user.is_superuser:
-                if proyecto.id_organizacion != request.user.id_organizacion:
+            organizacion = obtener_organizacion_usuario(request.user)
+            if not tiene_acceso_completo(request.user):
+                if proyecto.id_organizacion != organizacion:
                     return Response(
                         {'error': 'No tiene permiso para acceder a este proyecto.'},
                         status=status.HTTP_403_FORBIDDEN
@@ -1822,6 +1919,91 @@ class DashboardViewSet(viewsets.ViewSet):
             return Response(
                 {'error': 'Proyecto no encontrado.'},
                 status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class InformeGeneradoViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet para gestionar informes generados.
+    
+    Permite listar y descargar informes generados de proyectos.
+    Solo lectura para que los usuarios puedan consultar informes sin regenerarlos.
+    """
+    queryset = InformeGenerado.objects.all()
+    serializer_class = InformeGeneradoSerializer
+    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    
+    def get_queryset(self):
+        """Filtra los informes según la organización del usuario y el proyecto."""
+        queryset = InformeGenerado.objects.select_related('proyecto', 'generado_por')
+        
+        # Filtrar por proyecto si se proporciona
+        proyecto_id = self.request.query_params.get('proyecto', None)
+        if proyecto_id:
+            queryset = queryset.filter(proyecto_id=proyecto_id)
+        
+        # Filtrar por organización del usuario
+        organizacion = obtener_organizacion_usuario(self.request.user)
+        if not tiene_acceso_completo(self.request.user):
+            if organizacion:
+                queryset = queryset.filter(proyecto__id_organizacion=organizacion)
+            else:
+                queryset = queryset.none()
+        
+        return queryset.order_by('-fecha_generacion')
+    
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, IsOrganizationMember])
+    def descargar(self, request, pk=None):
+        """
+        Descarga el archivo del informe generado.
+        
+        Returns:
+            FileResponse con el archivo del informe
+        """
+        try:
+            informe = self.get_object()
+            
+            # Verificar permisos de organización
+            organizacion = obtener_organizacion_usuario(request.user)
+            if not tiene_acceso_completo(request.user):
+                if informe.proyecto.id_organizacion != organizacion:
+                    return Response(
+                        {'error': 'No tiene permiso para acceder a este informe.'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            
+            if not informe.archivo:
+                return Response(
+                    {'error': 'El archivo del informe no está disponible.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Preparar la respuesta con el archivo
+            # Asegurar que el nombre del archivo no tenga caracteres problemáticos
+            nombre_archivo_limpio = informe.nombre_archivo.strip()
+            # Remover cualquier carácter extra al final
+            nombre_archivo_limpio = nombre_archivo_limpio.rstrip('_').rstrip()
+            
+            response = FileResponse(
+                informe.archivo.open('rb'),
+                content_type='application/pdf' if informe.formato == 'pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            # Usar formato RFC 5987 para el nombre del archivo (mejor compatibilidad)
+            response['Content-Disposition'] = f'attachment; filename="{nombre_archivo_limpio}"; filename*=UTF-8\'\'{nombre_archivo_limpio}'
+            
+            return response
+        except InformeGenerado.DoesNotExist:
+            return Response(
+                {'error': 'Informe no encontrado.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error al descargar informe {pk}: {str(e)}", exc_info=True)
+            return Response(
+                {'error': f'Error al descargar el informe: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 

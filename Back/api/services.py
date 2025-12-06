@@ -328,16 +328,10 @@ class RenditionService:
         Returns:
             dict: Diccionario con resultado de la validación
         """
-        try:
-            resultado = validar_integridad_pre_rendicion(proyecto)
-            return resultado
-        except RendicionIncompletaException as e:
-            # Se retornan los errores encontrados sin lanzar excepción
-            return {
-                'valido': False,
-                'errores': [str(e.detail)],
-                'advertencias': []
-            }
+        # Llamar a validar_integridad_pre_rendicion sin lanzar excepción
+        # para obtener tanto errores como advertencias
+        resultado = validar_integridad_pre_rendicion(proyecto, lanzar_excepcion=False)
+        return resultado
     
     @staticmethod
     @db_transaction.atomic

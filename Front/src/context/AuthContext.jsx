@@ -62,14 +62,39 @@ export const AuthProvider = ({ children }) => {
   /**
    * Función para refrescar los datos del usuario actual.
    * Útil después de crear una organización o actualizar el perfil.
+   * 
+   * Actualiza desde localStorage (que puede haber sido actualizado manualmente)
+   * o desde el token JWT si está disponible.
    */
   const refreshUser = async () => {
     try {
       if (isAuthenticated()) {
+        // Primero intentar obtener desde localStorage (puede tener datos actualizados)
         const currentUser = getCurrentUser();
         if (currentUser) {
           setUser(currentUser);
           return currentUser;
+        }
+        
+        // Si no hay datos en localStorage, intentar decodificar el token
+        const accessToken = localStorage.getItem('access_token');
+        if (accessToken) {
+          try {
+            const tokenPayload = JSON.parse(atob(accessToken.split('.')[1]));
+            const userData = {
+              id: tokenPayload.user_id,
+              username: tokenPayload.username,
+              email: tokenPayload.email,
+              organizacion_id: tokenPayload.organizacion_id,
+              is_superuser: tokenPayload.is_superuser,
+              usuario_principal: tokenPayload.usuario_principal || false,
+            };
+            localStorage.setItem('user', JSON.stringify(userData));
+            setUser(userData);
+            return userData;
+          } catch (e) {
+            console.error('Error al decodificar token:', e);
+          }
         }
       }
     } catch (error) {

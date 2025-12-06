@@ -207,7 +207,7 @@ def validar_proyecto_no_bloqueado(proyecto):
     return True
 
 
-def validar_integridad_pre_rendicion(proyecto):
+def validar_integridad_pre_rendicion(proyecto, lanzar_excepcion=True):
     """
     Control C008: Revisión integridad pre-rendición.
     
@@ -216,12 +216,13 @@ def validar_integridad_pre_rendicion(proyecto):
     
     Args:
         proyecto: Instancia de Proyecto a validar
+        lanzar_excepcion: Si es True, lanza excepción cuando hay errores. Si es False, solo retorna el resultado.
         
     Returns:
         dict: Diccionario con errores y advertencias encontradas
         
     Raises:
-        RendicionIncompletaException: Si hay errores críticos
+        RendicionIncompletaException: Si hay errores críticos y lanzar_excepcion=True
     """
     errores = []
     advertencias = []
@@ -271,13 +272,25 @@ def validar_integridad_pre_rendicion(proyecto):
             f"no coincide con la suma de transacciones aprobadas ({monto_total_aprobado})."
         )
     
+    # Verificar si hay saldo disponible en el proyecto
+    from decimal import Decimal
+    presupuesto_total = Decimal(str(proyecto.presupuesto_total))
+    monto_ejecutado = Decimal(str(proyecto.monto_ejecutado_proyecto))
+    saldo_disponible = presupuesto_total - monto_ejecutado
+    
+    if saldo_disponible > 0:
+        advertencias.append(
+            f"El proyecto tiene un saldo disponible de ${saldo_disponible:,.2f} que no ha sido ejecutado. "
+            f"Presupuesto total: ${presupuesto_total:,.2f}, Monto ejecutado: ${monto_ejecutado:,.2f}."
+        )
+    
     resultado = {
         'errores': errores,
         'advertencias': advertencias,
         'valido': len(errores) == 0
     }
     
-    if errores:
+    if errores and lanzar_excepcion:
         raise RendicionIncompletaException(
             detail="; ".join(errores)
         )

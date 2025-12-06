@@ -41,6 +41,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['username'] = user.username
         token['email'] = user.email
         token['is_superuser'] = user.is_superuser
+        token['usuario_principal'] = getattr(user, 'usuario_principal', False)
 
         # Agrega el ID de la organización si el usuario pertenece a una
         if user.id_organizacion:

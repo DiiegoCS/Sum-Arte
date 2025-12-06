@@ -9,6 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getProject, getPreRendicion, descargarReporteEstado, descargarReporteRendicionOficial } from '../services/projectService';
 import { getTransactions } from '../services/transactionService';
+import { getInformesGenerados, descargarInforme } from '../services/informeService';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -22,8 +23,10 @@ const PreRendicion = () => {
   const [proyecto, setProyecto] = useState(null);
   const [validacion, setValidacion] = useState(null);
   const [transacciones, setTransacciones] = useState([]);
+  const [informes, setInformes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [descargandoReporte, setDescargandoReporte] = useState(false);
+  const [descargandoInforme, setDescargandoInforme] = useState(null);
 
   useEffect(() => {
     cargarDatos();
@@ -35,20 +38,26 @@ const PreRendicion = () => {
   const cargarDatos = async () => {
     try {
       setLoading(true);
-      const [proyectoData, validacionData, transaccionesData] = await Promise.all([
+      const [proyectoData, validacionData, transaccionesData, informesData] = await Promise.all([
         getProject(id),
         getPreRendicion(id),
         getTransactions({ proyecto: id }),
+        getInformesGenerados(id).catch(() => []), // Si falla, usar array vacío
       ]);
 
       // Extraer results si viene paginado
       const transaccionesList = Array.isArray(transaccionesData) 
         ? transaccionesData 
         : (transaccionesData.results || []);
+      
+      const informesList = Array.isArray(informesData) 
+        ? informesData 
+        : (informesData.results || []);
 
       setProyecto(proyectoData);
       setValidacion(validacionData);
       setTransacciones(transaccionesList);
+      setInformes(informesList);
     } catch (error) {
       toast.error('Error al cargar los datos de pre-rendición');
       console.error('Error:', error);
@@ -72,11 +81,35 @@ const PreRendicion = () => {
       setDescargandoReporte(true);
       await descargarReporteEstado(id, formato);
       toast.success(`Reporte ${formato.toUpperCase()} descargado exitosamente`);
+      // Recargar la lista de informes después de generar uno nuevo
+      const informesData = await getInformesGenerados(id);
+      const informesList = Array.isArray(informesData) 
+        ? informesData 
+        : (informesData.results || []);
+      setInformes(informesList);
     } catch (error) {
       console.error('Error al descargar reporte:', error);
       toast.error('Error al descargar el reporte');
     } finally {
       setDescargandoReporte(false);
+    }
+  };
+
+  /**
+   * Descarga un informe generado previamente.
+   */
+  const handleDescargarInforme = async (informeId) => {
+    try {
+      setDescargandoInforme(informeId);
+      // Obtener el informe de la lista para usar su nombre de archivo
+      const informe = informes.find(i => i.id === informeId);
+      await descargarInforme(informeId, informe?.nombre_archivo);
+      toast.success('Informe descargado exitosamente');
+    } catch (error) {
+      console.error('Error al descargar informe:', error);
+      toast.error('Error al descargar el informe');
+    } finally {
+      setDescargandoInforme(null);
     }
   };
 
@@ -100,7 +133,11 @@ const PreRendicion = () => {
     );
   }
 
-  const { errores = [], advertencias = [], valido = false, resumen = {} } = validacion;
+  // Asegurar que errores y advertencias sean arrays
+  const errores = Array.isArray(validacion?.errores) ? validacion.errores : (validacion?.errores ? [validacion.errores] : []);
+  const advertencias = Array.isArray(validacion?.advertencias) ? validacion.advertencias : (validacion?.advertencias ? [validacion.advertencias] : []);
+  const valido = validacion?.valido ?? false;
+  const resumen = validacion?.resumen || {};
 
   return (
     <>
@@ -268,7 +305,7 @@ const PreRendicion = () => {
       </div>
 
       {/* Errores críticos */}
-      {errores.length > 0 && (
+      {errores && Array.isArray(errores) && errores.length > 0 && (
         <div className="row">
           <div className="col-12 grid-margin stretch-card">
             <div className="card border-danger">
@@ -277,14 +314,42 @@ const PreRendicion = () => {
                   <i className="mdi mdi-close-circle me-2"></i>
                   Errores que impiden cerrar la rendición
                 </h4>
-                <ul className="list-unstyled mb-0">
-                  {errores.map((error, index) => (
-                    <li key={index} className="mb-2 p-2 bg-white bg-opacity-20 rounded">
-                      <i className="mdi mdi-alert-circle text-white me-2"></i>
-                      <strong>{error}</strong>
-                    </li>
-                  ))}
-                </ul>
+                <div>
+                  {errores.map((error, index) => {
+                    const errorText = typeof error === 'string' ? error : String(error || '');
+                    return (
+                      <div 
+                        key={`error-${index}`} 
+                        className="mb-2 p-2 bg-white bg-opacity-20 rounded"
+                      >
+                        <i className="mdi mdi-alert-circle text-white me-2"></i>
+                        <strong className="text-black">{errorText}</strong>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Mensaje de depuración si la validación falló pero no hay errores */}
+      {!valido && (!errores || !Array.isArray(errores) || errores.length === 0) && (
+        <div className="row">
+          <div className="col-12 grid-margin stretch-card">
+            <div className="card border-warning">
+              <div className="card-body bg-gradient-warning text-dark">
+                <h4 className="card-title mb-3">
+                  <i className="mdi mdi-alert me-2"></i>
+                  Información de depuración
+                </h4>
+                <p className="mb-0">
+                  La validación falló pero no se encontraron errores específicos. 
+                  Esto podría indicar un problema con la estructura de datos.
+                  <br />
+                  <small>Errores recibidos: {JSON.stringify(errores)}</small>
+                </p>
               </div>
             </div>
           </div>
@@ -413,6 +478,90 @@ const PreRendicion = () => {
           </div>
         </div>
       )}
+
+      {/* Lista de informes generados */}
+      <div className="row">
+        <div className="col-12 grid-margin stretch-card">
+          <div className="card">
+            <div className="card-body">
+              <h4 className="card-title">
+                <i className="mdi mdi-file-document-multiple me-2"></i>
+                Informes Generados
+              </h4>
+              <p className="text-muted mb-3">
+                Lista de informes previamente generados. Puede descargarlos sin necesidad de regenerarlos.
+              </p>
+              {informes.length === 0 ? (
+                <div className="alert alert-info">
+                  <i className="mdi mdi-information me-2"></i>
+                  No hay informes generados para este proyecto. Genere un nuevo informe usando el botón de arriba.
+                </div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="table table-hover">
+                    <thead>
+                      <tr>
+                        <th>Fecha de Generación</th>
+                        <th>Tipo</th>
+                        <th>Formato</th>
+                        <th>Tamaño</th>
+                        <th>Generado por</th>
+                        <th>Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {informes.map((informe) => (
+                        <tr key={informe.id}>
+                          <td>
+                            {new Date(informe.fecha_generacion).toLocaleString('es-CL', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </td>
+                          <td>
+                            <span className="badge badge-gradient-info">
+                              {informe.tipo_informe === 'estado' ? 'Estado del Proyecto' : informe.tipo_informe}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`badge ${informe.formato === 'pdf' ? 'badge-gradient-danger' : 'badge-gradient-success'}`}>
+                              {informe.formato.toUpperCase()}
+                            </span>
+                          </td>
+                          <td>{informe.tamaño_display || 'N/A'}</td>
+                          <td>{informe.generado_por_nombre || 'N/A'}</td>
+                          <td>
+                            <button
+                              className="btn btn-sm btn-gradient-primary"
+                              onClick={() => handleDescargarInforme(informe.id)}
+                              disabled={descargandoInforme === informe.id}
+                            >
+                              {descargandoInforme === informe.id ? (
+                                <>
+                                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                  Descargando...
+                                </>
+                              ) : (
+                                <>
+                                  <i className="mdi mdi-download me-2"></i>
+                                  Descargar
+                                </>
+                              )}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </>
   );
 };

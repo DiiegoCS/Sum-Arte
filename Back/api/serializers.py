@@ -9,7 +9,7 @@ from rest_framework import serializers
 from .models import (
     Proyecto, Organizacion, Usuario, Rol, Usuario_Rol_Proyecto, Proveedor, Transaccion,
     Item_Presupuestario, Subitem_Presupuestario, Evidencia, Transaccion_Evidencia, Log_transaccion,
-    InvitacionUsuario
+    InvitacionUsuario, InformeGenerado
 )
 from .validators import (
     validar_duplicidad, validar_saldo_disponible, validar_categoria_gasto,
@@ -599,7 +599,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Usuario
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'id_organizacion', 'organizacion_nombre', 'is_superuser', 'is_active']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'id_organizacion', 'organizacion_nombre', 'is_superuser', 'is_active', 'usuario_principal']
         read_only_fields = ['id']
         
         extra_kwargs = {
@@ -853,3 +853,39 @@ class AceptarInvitacionSerializer(serializers.Serializer):
         if Usuario.objects.filter(username=value).exists():
             raise serializers.ValidationError("Este nombre de usuario ya está en uso.")
         return value
+
+
+class InformeGeneradoSerializer(serializers.ModelSerializer):
+    """
+    Serializador para informes generados.
+    
+    Incluye información del proyecto y del usuario que generó el informe.
+    """
+    proyecto_nombre = serializers.CharField(source='proyecto.nombre_proyecto', read_only=True)
+    generado_por_nombre = serializers.SerializerMethodField()
+    tamaño_display = serializers.CharField(source='get_tamaño_display', read_only=True)
+    url_descarga = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = InformeGenerado
+        fields = [
+            'id', 'proyecto', 'proyecto_nombre', 'tipo_informe', 'formato',
+            'nombre_archivo', 'fecha_generacion', 'generado_por', 'generado_por_nombre',
+            'descripcion', 'tamaño_archivo', 'tamaño_display', 'url_descarga'
+        ]
+        read_only_fields = [
+            'id', 'fecha_generacion', 'tamaño_archivo', 'archivo'
+        ]
+    
+    def get_generado_por_nombre(self, obj):
+        """Retorna el nombre completo del usuario que generó el informe."""
+        if obj.generado_por:
+            nombre_completo = f"{obj.generado_por.first_name} {obj.generado_por.last_name}".strip()
+            return nombre_completo if nombre_completo else obj.generado_por.username
+        return "N/A"
+    
+    def get_url_descarga(self, obj):
+        """Retorna la URL para descargar el informe."""
+        if obj.archivo:
+            return f"/api/informes/{obj.id}/descargar/"
+        return None

@@ -82,8 +82,13 @@ class Usuario(AbstractUser):
     id_organizacion = models.ForeignKey(
         Organizacion, 
         on_delete=models.CASCADE,
-        null=True,  # Permitimos que esté vacío (importante para el superusuario)
+        null=True,  # Permitimos que esté vacío (importante para el superusuario y usuario principal)
         blank=True
+    )
+    usuario_principal = models.BooleanField(
+        default=False,
+        help_text="Indica si este usuario es el usuario principal de una organización. "
+                  "Los usuarios principales pueden crear organizaciones sin tener una asignada."
     )
 
     def __str__(self):
@@ -670,3 +675,85 @@ class Subitem_Presupuestario(models.Model):
         if self.monto_asignado_subitem == 0:
             return 0.0
         return float((self.monto_ejecutado_subitem / self.monto_asignado_subitem) * 100)
+
+
+### --- Modelo para almacenamiento de informes generados ---
+
+class InformeGenerado(models.Model):
+    """
+    Modelo para almacenar informes generados (PDF, Excel) de proyectos.
+    
+    Permite a los usuarios consultar informes previamente generados sin necesidad
+    de volver a generarlos, especialmente útil para usuarios sin permisos de generación.
+    """
+    proyecto = models.ForeignKey(
+        Proyecto,
+        on_delete=models.CASCADE,
+        related_name='informes_generados',
+        db_index=True,
+        help_text="Proyecto al que pertenece el informe"
+    )
+    tipo_informe = models.CharField(
+        max_length=50,
+        help_text="Tipo de informe: 'estado', 'rendicion_oficial', etc."
+    )
+    formato = models.CharField(
+        max_length=10,
+        choices=[('pdf', 'PDF'), ('excel', 'Excel')],
+        help_text="Formato del archivo generado"
+    )
+    archivo = models.FileField(
+        upload_to='informes/',
+        help_text="Archivo del informe generado"
+    )
+    nombre_archivo = models.CharField(
+        max_length=255,
+        help_text="Nombre original del archivo"
+    )
+    fecha_generacion = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        help_text="Fecha y hora en que se generó el informe"
+    )
+    generado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='informes_generados',
+        help_text="Usuario que generó el informe"
+    )
+    descripcion = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Descripción opcional del informe"
+    )
+    tamaño_archivo = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text="Tamaño del archivo en bytes"
+    )
+    
+    class Meta:
+        verbose_name = 'Informe Generado'
+        verbose_name_plural = 'Informes Generados'
+        ordering = ['-fecha_generacion']
+        indexes = [
+            models.Index(fields=['proyecto', 'fecha_generacion']),
+            models.Index(fields=['tipo_informe', 'formato']),
+        ]
+    
+    def __str__(self):
+        return f"{self.tipo_informe} - {self.proyecto.nombre_proyecto} - {self.fecha_generacion.strftime('%Y-%m-%d %H:%M')}"
+    
+    def get_tamaño_display(self):
+        """Retorna el tamaño del archivo en formato legible."""
+        if not self.tamaño_archivo:
+            return "N/A"
+        
+        tamaño = self.tamaño_archivo
+        for unidad in ['B', 'KB', 'MB', 'GB']:
+            if tamaño < 1024.0:
+                return f"{tamaño:.2f} {unidad}"
+            tamaño /= 1024.0
+        return f"{tamaño:.2f} TB"
