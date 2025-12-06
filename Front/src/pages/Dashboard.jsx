@@ -7,7 +7,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { getDashboardMetrics, getProjects } from '../services/projectService';
 import { toast, ToastContainer } from 'react-toastify';
 import {
@@ -32,10 +33,38 @@ const Dashboard = () => {
   const [metrics, setMetrics] = useState(null);
   const [proyectos, setProyectos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // Verificar si el usuario debe ser redirigido a crear organización
+  useEffect(() => {
+    if (user) {
+      const debeCrearOrganizacion = 
+        !user.organizacion_id && // No tiene organización asignada
+        user.usuario_principal === true && // Es usuario principal
+        user.is_superuser === false; // No es superusuario
+
+      if (debeCrearOrganizacion) {
+        navigate('/crear-organizacion', { replace: true });
+        return;
+      }
+    }
+  }, [user, navigate]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    // Solo cargar datos si el usuario no será redirigido
+    if (user) {
+      const debeCrearOrganizacion = 
+        !user.organizacion_id &&
+        user.usuario_principal === true &&
+        user.is_superuser === false;
+
+      if (!debeCrearOrganizacion) {
+        loadData();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const loadData = async () => {
     try {

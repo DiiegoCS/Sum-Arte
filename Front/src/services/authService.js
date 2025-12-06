@@ -36,6 +36,7 @@ export const login = async (username, password) => {
       email: tokenPayload.email,
       organizacion_id: tokenPayload.organizacion_id,
       is_superuser: tokenPayload.is_superuser,
+      usuario_principal: tokenPayload.usuario_principal || false,
     };
     localStorage.setItem('user', JSON.stringify(userData));
 

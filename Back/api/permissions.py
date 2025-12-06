@@ -12,6 +12,7 @@ from .models import (
     Usuario_Rol_Proyecto, Rol, Proyecto,
     ROL_ADMIN_PRYECTO, ROL_EJECUTOR, ROL_AUDITOR, ROL_DIRECTIVO
 )
+from .utils import obtener_organizacion_usuario, tiene_acceso_completo
 
 
 class IsOrganizationMember(BasePermission):
@@ -32,24 +33,26 @@ class IsOrganizationMember(BasePermission):
             obj: El objeto que se accede (puede ser Proyecto, Organizacion, etc.)
             
         Returns:
-            bool: True si el usuario es superusuario o pertenece a la misma organización que obj,
+            bool: True si el usuario tiene acceso completo o pertenece a la misma organización que obj,
                   False en caso contrario
         """
-        # Los superusuarios tienen acceso a todo
-        if request.user.is_superuser:
+        organizacion = obtener_organizacion_usuario(request.user)
+        
+        # Los superusuarios sin organización tienen acceso a todo
+        if tiene_acceso_completo(request.user):
             return True
             
         # Verifica si el objeto tiene atributo de organización
         if hasattr(obj, 'id_organizacion'):
-            return obj.id_organizacion == request.user.id_organizacion
+            return obj.id_organizacion == organizacion
             
         # Para objetos que pertenecen a un proyecto, verifica la organización del proyecto
         if hasattr(obj, 'proyecto'):
-            return obj.proyecto.id_organizacion == request.user.id_organizacion
+            return obj.proyecto.id_organizacion == organizacion
             
         # Para proyectos, verifica directamente
         if isinstance(obj, Proyecto):
-            return obj.id_organizacion == request.user.id_organizacion
+            return obj.id_organizacion == organizacion
             
         return False
 
@@ -69,9 +72,9 @@ class HasProjectRole(BasePermission):
         """
         Verifica si el usuario tiene el rol requerido globalmente.
         
-        Los superusuarios siempre tienen permiso.
+        Los superusuarios sin organización siempre tienen permiso.
         """
-        if request.user.is_superuser:
+        if tiene_acceso_completo(request.user):
             return True
         return True  # La verificación a nivel de objeto se realiza en has_object_permission
     
@@ -88,7 +91,7 @@ class HasProjectRole(BasePermission):
             bool: True si el usuario tiene alguno de los roles requeridos en el proyecto,
                   False en caso contrario
         """
-        if request.user.is_superuser:
+        if tiene_acceso_completo(request.user):
             return True
             
         # Obtiene el proyecto desde el objeto
@@ -121,39 +124,47 @@ class IsAdminProyecto(HasProjectRole):
 class IsAdminProyectoEnOrganizacion(BasePermission):
     """
     Clase de permiso que verifica si el usuario es Administrador de Proyecto
-    en al menos un proyecto de su organización.
+    en al menos un proyecto de su organización, o si es usuario principal.
     
-    Útil para permitir crear nuevos proyectos solo a usuarios que ya tienen
-    el rol de administrador en algún proyecto de su organización.
+    Útil para permitir crear nuevos proyectos a:
+    - Usuarios que ya tienen el rol de administrador en algún proyecto de su organización
+    - Usuarios principales (pueden crear el primer proyecto de una organización nueva)
     """
     
     def has_permission(self, request, view):
         """
-        Verifica si el usuario es administrador de proyecto en su organización.
+        Verifica si el usuario puede crear proyectos.
         
         Args:
             request: El objeto request de Django REST Framework
             view: La vista a la que se accede
             
         Returns:
-            bool: True si el usuario es superusuario o tiene rol de administrador
-                  de proyecto en al menos un proyecto de su organización,
+            bool: True si el usuario:
+                  - Tiene acceso completo (superusuario sin organización), o
+                  - Es usuario principal (puede crear el primer proyecto), o
+                  - Tiene rol de administrador de proyecto en al menos un proyecto de su organización
                   False en caso contrario
         """
-        if request.user.is_superuser:
+        if tiene_acceso_completo(request.user):
             return True
         
         if not request.user.is_authenticated:
             return False
         
+        # Los usuarios principales pueden crear proyectos (especialmente el primer proyecto)
+        if getattr(request.user, 'usuario_principal', False):
+            return True
+        
         # Verifica si el usuario tiene el rol de administrador de proyecto
         # en al menos un proyecto de su organización
-        if not hasattr(request.user, 'id_organizacion') or not request.user.id_organizacion:
+        organizacion = obtener_organizacion_usuario(request.user)
+        if not organizacion:
             return False
         
         user_roles = Usuario_Rol_Proyecto.objects.filter(
             usuario=request.user,
-            proyecto__id_organizacion=request.user.id_organizacion,
+            proyecto__id_organizacion=organizacion,
             rol__nombre_rol=ROL_ADMIN_PRYECTO
         )
         
@@ -219,7 +230,7 @@ class CanApproveTransaction(BasePermission):
             bool: True si el usuario puede aprobar la transacción (es admin del proyecto
                   y no es el creador), False en caso contrario
         """
-        if request.user.is_superuser:
+        if tiene_acceso_completo(request.user):
             return True
             
         # Verifica si el usuario es Administrador de Proyecto para este proyecto
@@ -256,10 +267,10 @@ class CanCreateTransaction(BasePermission):
             view: La vista a la que se accede
             
         Returns:
-            bool: True si el usuario es superusuario o la verificación se hace a nivel
+            bool: True si el usuario tiene acceso completo o la verificación se hace a nivel
                   de objeto, False en caso contrario
         """
-        if request.user.is_superuser:
+        if tiene_acceso_completo(request.user):
             return True
         return True  # La verificación a nivel de objeto se realiza en has_object_permission
     
@@ -273,10 +284,10 @@ class CanCreateTransaction(BasePermission):
             obj: El objeto Proyecto para el cual se quiere crear la transacción
             
         Returns:
-            bool: True si el usuario es superusuario o tiene rol de Ejecutor o
+            bool: True si el usuario tiene acceso completo o tiene rol de Ejecutor o
                   Administrador de Proyecto en el proyecto, False en caso contrario
         """
-        if request.user.is_superuser:
+        if tiene_acceso_completo(request.user):
             return True
             
         if isinstance(obj, Proyecto):
@@ -312,10 +323,10 @@ class CanViewDashboard(BasePermission):
             view: La vista a la que se accede
             
         Returns:
-            bool: True si el usuario es superusuario o tiene algún rol en algún proyecto,
+            bool: True si el usuario tiene acceso completo o tiene algún rol en algún proyecto,
                   False en caso contrario
         """
-        if request.user.is_superuser:
+        if tiene_acceso_completo(request.user):
             return True
             
         # Verifica si el usuario tiene algún rol en algún proyecto
@@ -346,10 +357,10 @@ class CanEditDeleteTransaction(BasePermission):
             view: La vista a la que se accede
             
         Returns:
-            bool: True si el usuario está autenticado (la verificación específica
+            bool: True si el usuario tiene acceso completo o está autenticado (la verificación específica
                   se hace en has_object_permission), False en caso contrario
         """
-        if request.user.is_superuser:
+        if tiene_acceso_completo(request.user):
             return True
         return request.user.is_authenticated
     
@@ -363,10 +374,10 @@ class CanEditDeleteTransaction(BasePermission):
             obj: El objeto Transaccion a editar/eliminar
             
         Returns:
-            bool: True si el usuario es superusuario o es admin del proyecto,
+            bool: True si el usuario tiene acceso completo o es admin del proyecto,
                   False en caso contrario
         """
-        if request.user.is_superuser:
+        if tiene_acceso_completo(request.user):
             return True
             
         # Verifica si el usuario es Administrador de Proyecto para este proyecto

@@ -22,6 +22,7 @@ router.register(r'logs-transacciones', views.LogTransaccionViewSet, basename='lo
 router.register(r'items-presupuestarios', views.ItemPresupuestarioViewSet, basename='itempresupuestario')
 router.register(r'subitems-presupuestarios', views.SubitemPresupuestarioViewSet, basename='subitempresupuestario')
 router.register(r'dashboard', views.DashboardViewSet, basename='dashboard')
+router.register(r'informes', views.InformeGeneradoViewSet, basename='informe')
 
 
 # Las URLs de la API ahora son determinadas por el router.

@@ -8,6 +8,68 @@ formateo y otras operaciones comunes.
 import re
 
 
+def obtener_organizacion_usuario(usuario):
+    """
+    Obtiene la organización efectiva del usuario.
+    
+    Si el usuario es superusuario y tiene una organización asignada,
+    retorna esa organización. Si es superusuario sin organización,
+    retorna None (acceso completo). Si no es superusuario, retorna
+    su organización.
+    
+    Args:
+        usuario: Instancia de Usuario
+        
+    Returns:
+        Organizacion o None: La organización del usuario, o None si tiene acceso completo
+    """
+    if usuario.is_superuser:
+        # Superusuarios con organización asignada solo ven datos de esa organización
+        return usuario.id_organizacion
+    else:
+        # Usuarios normales ven datos de su organización
+        return usuario.id_organizacion
+
+
+def tiene_acceso_completo(usuario):
+    """
+    Verifica si el usuario tiene acceso completo (sin restricción de organización).
+    
+    Un usuario tiene acceso completo si:
+    - Es superusuario Y no tiene organización asignada
+    
+    Args:
+        usuario: Instancia de Usuario
+        
+    Returns:
+        bool: True si tiene acceso completo, False en caso contrario
+    """
+    return usuario.is_superuser and not usuario.id_organizacion
+
+
+def puede_crear_organizacion(usuario):
+    """
+    Verifica si el usuario puede crear una organización.
+    
+    Un usuario puede crear una organización si:
+    - Es superusuario sin organización asignada
+    - Es usuario principal sin organización asignada
+    - No tiene organización asignada (comportamiento por defecto para compatibilidad)
+    
+    Args:
+        usuario: Instancia de Usuario
+        
+    Returns:
+        bool: True si puede crear organización, False en caso contrario
+    """
+    # Si ya tiene organización, no puede crear otra
+    if usuario.id_organizacion:
+        return False
+    
+    # Puede crear si es superusuario sin organización o usuario principal
+    return usuario.is_superuser or getattr(usuario, 'usuario_principal', False)
+
+
 def validar_rut_chileno(rut):
     """
     Valida el formato y dígito verificador de un RUT chileno.

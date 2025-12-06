@@ -7,14 +7,18 @@ from .models import (Proyecto, Organizacion, Usuario, Rol, Usuario_Rol_Proyecto,
 
 # -- Formulario pesonalizado para modelo Usuario
 class UsuarioAdmin(UserAdmin):
+    # Campos que se muestran en la lista de usuarios
+    list_display = UserAdmin.list_display + ('id_organizacion', 'usuario_principal',)
+    list_filter = UserAdmin.list_filter + ('id_organizacion', 'usuario_principal',)
+    
     # Campos que se muestran al CREAR un usuario
     add_fieldsets = UserAdmin.add_fieldsets + (
-        (None, {'fields': ('email', 'id_organizacion',)}),
+        (None, {'fields': ('email', 'id_organizacion', 'usuario_principal',)}),
     )
     
     # Campos que se muestran al EDITAR un usuario
     fieldsets = UserAdmin.fieldsets + (
-        ('Info de Organización', {'fields': ('id_organizacion',)}),
+        ('Info de Organización', {'fields': ('id_organizacion', 'usuario_principal',)}),
     )
 
 admin.site.register(Proyecto)

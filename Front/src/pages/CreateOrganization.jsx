@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { createOrganizacion, verificarRUT } from '../services/organizacionService';
 import { toast, ToastContainer } from 'react-toastify';
@@ -148,11 +148,24 @@ const CreateOrganization = () => {
 
       const organizacion = await createOrganizacion(organizacionData);
       
-      toast.success('Organización creada exitosamente. Serás redirigido al dashboard.');
+      // Actualizar la información del usuario con la nueva organización asignada
+      // El backend asigna automáticamente la organización al usuario
+      if (organizacion && organizacion.id) {
+        // Actualizar el userData en localStorage con la nueva organizacion_id
+        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+        const updatedUser = {
+          ...currentUser,
+          organizacion_id: organizacion.id,
+        };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        
+        // Actualizar el contexto de autenticación
+        if (refreshUser) {
+          await refreshUser();
+        }
+      }
       
-      // Nota: El backend asigna automáticamente la organización al usuario.
-      // El token JWT se actualizará en el próximo login.
-      // Por ahora, redirigimos al dashboard.
+      toast.success('Organización creada exitosamente. Serás redirigido al dashboard.');
       
       // Redirigir al dashboard después de un breve delay
       setTimeout(() => {
@@ -189,13 +202,39 @@ const CreateOrganization = () => {
   };
 
   return (
-    <div className="container">
-      <div className="row justify-content-center mt-5">
-        <div className="col-md-8 col-lg-12">
-          <div className="card shadow">
+    <>
+      <ToastContainer position="top-right" autoClose={3000} />
+      
+      {/* Page Header estilo template */}
+      <div className="page-header">
+        <div>
+          <h3 className="page-title">
+            <span className="page-title-icon bg-gradient-primary text-white me-2">
+              <i className="mdi mdi-office-building"></i>
+            </span>
+            Crear Organización
+          </h3>
+          <nav aria-label="breadcrumb">
+            <ul className="breadcrumb">
+              <li className="breadcrumb-item">
+                <Link to="/" className="text-decoration-none">Dashboard</Link>
+              </li>
+              <li className="breadcrumb-item active" aria-current="page">
+                Crear Organización
+              </li>
+            </ul>
+          </nav>
+        </div>
+      </div>
+
+      <div className="row">
+        <div className="col-12 grid-margin stretch-card">
+          <div className="card">
             <div className="card-body">
-              <h2 className="card-title text-center mb-4">Sum-Arte</h2>
-              <h5 className="text-center text-muted mb-4">Crear Organización</h5>
+              <h4 className="card-title mb-4">
+                <i className="mdi mdi-information me-2"></i>
+                Información de la Organización
+              </h4>
               
               <form onSubmit={handleSubmit}>
                 <div className="mb-3">
@@ -288,21 +327,32 @@ const CreateOrganization = () => {
                   )}
                 </div>
 
-                <div className="d-grid gap-2">
-                  <button
-                    type="submit"
-                    className="btn btn-primary"
-                    disabled={loading || verificandoRUT}
-                  >
-                    {loading ? 'Creando organización...' : 'Crear Organización'}
-                  </button>
+                <div className="d-flex justify-content-end gap-2 mt-4">
                   <button
                     type="button"
-                    className="btn btn-outline-secondary"
+                    className="btn btn-gradient-secondary"
                     onClick={() => navigate('/')}
-                    disabled={loading}
+                    disabled={loading || verificandoRUT}
                   >
+                    <i className="mdi mdi-close me-2"></i>
                     Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-gradient-primary"
+                    disabled={loading || verificandoRUT}
+                  >
+                    {loading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                        Creando organización...
+                      </>
+                    ) : (
+                      <>
+                        <i className="mdi mdi-content-save me-2"></i>
+                        Crear Organización
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -310,8 +360,7 @@ const CreateOrganization = () => {
           </div>
         </div>
       </div>
-      <ToastContainer position="top-right" autoClose={3000} />
-    </div>
+    </>
   );
 };
 
