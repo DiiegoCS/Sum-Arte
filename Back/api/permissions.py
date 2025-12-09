@@ -123,12 +123,13 @@ class IsAdminProyecto(HasProjectRole):
 
 class IsAdminProyectoEnOrganizacion(BasePermission):
     """
-    Clase de permiso que verifica si el usuario es Administrador de Proyecto
-    en al menos un proyecto de su organización, o si es usuario principal.
+    Clase de permiso que verifica si el usuario puede crear proyectos.
     
-    Útil para permitir crear nuevos proyectos a:
-    - Usuarios que ya tienen el rol de administrador en algún proyecto de su organización
+    Permite crear proyectos a:
+    - Superusuarios sin organización
     - Usuarios principales (pueden crear el primer proyecto de una organización nueva)
+    - Administradores de proyecto en al menos un proyecto de su organización
+    - Directivos en al menos un proyecto de su organización
     """
     
     def has_permission(self, request, view):
@@ -143,7 +144,8 @@ class IsAdminProyectoEnOrganizacion(BasePermission):
             bool: True si el usuario:
                   - Tiene acceso completo (superusuario sin organización), o
                   - Es usuario principal (puede crear el primer proyecto), o
-                  - Tiene rol de administrador de proyecto en al menos un proyecto de su organización
+                  - Tiene rol de administrador de proyecto en al menos un proyecto de su organización, o
+                  - Tiene rol de directivo en al menos un proyecto de su organización
                   False en caso contrario
         """
         if tiene_acceso_completo(request.user):
@@ -156,7 +158,7 @@ class IsAdminProyectoEnOrganizacion(BasePermission):
         if getattr(request.user, 'usuario_principal', False):
             return True
         
-        # Verifica si el usuario tiene el rol de administrador de proyecto
+        # Verifica si el usuario tiene el rol de administrador de proyecto o directivo
         # en al menos un proyecto de su organización
         organizacion = obtener_organizacion_usuario(request.user)
         if not organizacion:
@@ -165,7 +167,7 @@ class IsAdminProyectoEnOrganizacion(BasePermission):
         user_roles = Usuario_Rol_Proyecto.objects.filter(
             usuario=request.user,
             proyecto__id_organizacion=organizacion,
-            rol__nombre_rol=ROL_ADMIN_PRYECTO
+            rol__nombre_rol__in=[ROL_ADMIN_PRYECTO, ROL_DIRECTIVO]
         )
         
         return user_roles.exists()
@@ -262,17 +264,42 @@ class CanCreateTransaction(BasePermission):
         """
         Verifica si el usuario puede crear transacciones.
         
-        Args:
-            request: El objeto request de Django REST Framework
-            view: La vista a la que se accede
-            
-        Returns:
-            bool: True si el usuario tiene acceso completo o la verificación se hace a nivel
-                  de objeto, False en caso contrario
+        Para creación (POST), se valida aquí mismo usando el proyecto indicado en el payload.
+        Solo Admin de Proyecto o Ejecutor del proyecto pueden crear.
         """
         if tiene_acceso_completo(request.user):
             return True
-        return True  # La verificación a nivel de objeto se realiza en has_object_permission
+        
+        if not request.user.is_authenticated:
+            return False
+        
+        # Solo aplica a creación; para otras acciones se evalúa en has_object_permission
+        if request.method != 'POST':
+            return True
+        
+        proyecto_id = request.data.get('proyecto') or request.data.get('proyecto_id')
+        if not proyecto_id:
+            return False
+        
+        try:
+            from .models import Proyecto
+            proyecto = Proyecto.objects.get(id=proyecto_id)
+        except Proyecto.DoesNotExist:
+            return False
+        
+        # Validar organización
+        organizacion = obtener_organizacion_usuario(request.user)
+        if not tiene_acceso_completo(request.user):
+            if not organizacion or proyecto.id_organizacion != organizacion:
+                return False
+        
+        # Verificar rol en el proyecto (solo Admin Proyecto o Ejecutor)
+        user_roles = Usuario_Rol_Proyecto.objects.filter(
+            usuario=request.user,
+            proyecto=proyecto,
+            rol__nombre_rol__in=[ROL_EJECUTOR, ROL_ADMIN_PRYECTO]
+        )
+        return user_roles.exists()
     
     def has_object_permission(self, request, view, obj):
         """
@@ -388,4 +415,150 @@ class CanEditDeleteTransaction(BasePermission):
         ).exists()
         
         return is_admin
+
+
+class CanGenerateReports(BasePermission):
+    """
+    Clase de permiso que verifica si el usuario puede generar informes.
+    
+    Requisitos:
+    - El usuario debe ser Administrador de Proyecto o Directivo para el proyecto
+    - Los Auditores NO pueden generar informes, solo consultarlos
+    """
+    
+    def has_permission(self, request, view):
+        """
+        Verifica si el usuario tiene permiso para generar informes.
+        
+        Primero verifica si el usuario es auditor (y lo rechaza inmediatamente),
+        luego verifica si tiene los roles necesarios en el proyecto.
+        
+        Args:
+            request: El objeto request de Django REST Framework
+            view: La vista a la que se accede
+            
+        Returns:
+            bool: True si el usuario tiene acceso completo o tiene rol de Admin Proyecto
+                  o Directivo en el proyecto, False en caso contrario (incluyendo auditores)
+        """
+        if tiene_acceso_completo(request.user):
+            return True
+        
+        if not request.user.is_authenticated:
+            return False
+        
+        # Obtener el ID del proyecto de la URL
+        proyecto_id = view.kwargs.get('pk')
+        if not proyecto_id:
+            # Si no hay proyecto_id, permitir que has_object_permission lo verifique
+            return True
+        
+        try:
+            proyecto = Proyecto.objects.get(id=proyecto_id)
+        except Proyecto.DoesNotExist:
+            return False
+        
+        # Verificar si el usuario es auditor - si lo es, rechazar inmediatamente
+        is_auditor = Usuario_Rol_Proyecto.objects.filter(
+            usuario=request.user,
+            proyecto=proyecto,
+            rol__nombre_rol=ROL_AUDITOR
+        ).exists()
+        
+        if is_auditor:
+            return False
+        
+        # Verificar si el usuario es Administrador de Proyecto o Directivo
+        user_roles = Usuario_Rol_Proyecto.objects.filter(
+            usuario=request.user,
+            proyecto=proyecto,
+            rol__nombre_rol__in=[ROL_ADMIN_PRYECTO, ROL_DIRECTIVO]
+        )
+        
+        return user_roles.exists()
+    
+    def has_object_permission(self, request, view, obj):
+        """
+        Verifica si el usuario puede generar informes para este proyecto.
+        
+        Args:
+            request: El objeto request de Django REST Framework
+            view: La vista a la que se accede
+            obj: El objeto Proyecto para el cual se quiere generar el informe
+            
+        Returns:
+            bool: True si el usuario tiene acceso completo o tiene rol de Admin Proyecto
+                  o Directivo en el proyecto, False en caso contrario
+        """
+        if tiene_acceso_completo(request.user):
+            return True
+            
+        if isinstance(obj, Proyecto):
+            proyecto = obj
+        elif hasattr(obj, 'proyecto'):
+            proyecto = obj.proyecto
+        else:
+            return False
+        
+        # Verificar si el usuario es auditor - si lo es, rechazar inmediatamente
+        is_auditor = Usuario_Rol_Proyecto.objects.filter(
+            usuario=request.user,
+            proyecto=proyecto,
+            rol__nombre_rol=ROL_AUDITOR
+        ).exists()
+        
+        if is_auditor:
+            return False
+            
+        # Verifica si el usuario es Administrador de Proyecto o Directivo
+        user_roles = Usuario_Rol_Proyecto.objects.filter(
+            usuario=request.user,
+            proyecto=proyecto,
+            rol__nombre_rol__in=[ROL_ADMIN_PRYECTO, ROL_DIRECTIVO]
+        )
+        
+        return user_roles.exists()
+
+
+class CanViewReports(BasePermission):
+    """
+    Clase de permiso que verifica si el usuario puede ver y descargar informes generados.
+    
+    Requisitos:
+    - El usuario debe tener cualquier rol en el proyecto (Admin, Ejecutor, Directivo, Auditor)
+    - Todos los roles con acceso al proyecto pueden ver y descargar informes generados
+    """
+    
+    def has_object_permission(self, request, view, obj):
+        """
+        Verifica si el usuario puede ver/descargar informes para este proyecto.
+        
+        Args:
+            request: El objeto request de Django REST Framework
+            view: La vista a la que se accede
+            obj: El objeto (Proyecto o InformeGenerado) para el cual se quiere acceder
+            
+        Returns:
+            bool: True si el usuario tiene acceso completo o tiene cualquier rol en el proyecto,
+                  False en caso contrario
+        """
+        if tiene_acceso_completo(request.user):
+            return True
+            
+        # Obtener el proyecto desde el objeto
+        proyecto = None
+        if isinstance(obj, Proyecto):
+            proyecto = obj
+        elif hasattr(obj, 'proyecto'):
+            proyecto = obj.proyecto
+        else:
+            return False
+            
+        # Verifica si el usuario tiene cualquier rol en el proyecto
+        user_roles = Usuario_Rol_Proyecto.objects.filter(
+            usuario=request.user,
+            proyecto=proyecto
+        )
+        
+        return user_roles.exists()
 

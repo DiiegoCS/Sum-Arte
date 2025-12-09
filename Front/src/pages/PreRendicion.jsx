@@ -10,6 +10,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getProject, getPreRendicion, descargarReporteEstado, descargarReporteRendicionOficial } from '../services/projectService';
 import { getTransactions } from '../services/transactionService';
 import { getInformesGenerados, descargarInforme } from '../services/informeService';
+import { useUserRoles } from '../hooks/useUserRoles';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -19,6 +20,7 @@ import 'react-toastify/dist/ReactToastify.css';
 const PreRendicion = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { canGenerateReports, loading: loadingRoles } = useUserRoles(id);
   
   const [proyecto, setProyecto] = useState(null);
   const [validacion, setValidacion] = useState(null);
@@ -200,7 +202,7 @@ const PreRendicion = () => {
                   </>
                 )}
               </button>
-            ) : (
+            ) : canGenerateReports && !loadingRoles ? (
               <div className="btn-group" style={{ minWidth: '5rem' }}>
                 <button
                   className="btn btn-gradient-primary"
@@ -242,7 +244,7 @@ const PreRendicion = () => {
                   </li>
                 </ul>
               </div>
-            )}
+            ) : null}
             <button className="btn btn-gradient-info" onClick={() => navigate(`/proyecto/${id}`)}>
               <i className="mdi mdi-arrow-left me-2"></i>
               <span className="d-none d-md-inline">Volver al Proyecto</span>
@@ -328,28 +330,6 @@ const PreRendicion = () => {
                     );
                   })}
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Mensaje de depuración si la validación falló pero no hay errores */}
-      {!valido && (!errores || !Array.isArray(errores) || errores.length === 0) && (
-        <div className="row">
-          <div className="col-12 grid-margin stretch-card">
-            <div className="card border-warning">
-              <div className="card-body bg-gradient-warning text-dark">
-                <h4 className="card-title mb-3">
-                  <i className="mdi mdi-alert me-2"></i>
-                  Información de depuración
-                </h4>
-                <p className="mb-0">
-                  La validación falló pero no se encontraron errores específicos. 
-                  Esto podría indicar un problema con la estructura de datos.
-                  <br />
-                  <small>Errores recibidos: {JSON.stringify(errores)}</small>
-                </p>
               </div>
             </div>
           </div>
@@ -494,7 +474,9 @@ const PreRendicion = () => {
               {informes.length === 0 ? (
                 <div className="alert alert-info">
                   <i className="mdi mdi-information me-2"></i>
-                  No hay informes generados para este proyecto. Genere un nuevo informe usando el botón de arriba.
+                  {canGenerateReports && !loadingRoles 
+                    ? 'No hay informes generados para este proyecto. Genere un nuevo informe usando el botón de arriba.'
+                    : 'No hay informes generados para este proyecto. Solo los Administradores de Proyecto y Directivos pueden generar nuevos informes.'}
                 </div>
               ) : (
                 <div className="table-responsive">

@@ -77,7 +77,7 @@ function App() {
             <Route
               path="/proyecto/:id/editar"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute checkPermission={({ canEditProject }) => canEditProject}>
                   <Layout>
                     <CreateEditProject />
                   </Layout>
@@ -119,7 +119,7 @@ function App() {
             <Route
               path="/registrar-gasto"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute checkPermission={({ canCreateTransaction }) => canCreateTransaction}>
                   <Layout>
                     <RegisterExpense />
                   </Layout>

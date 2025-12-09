@@ -15,6 +15,7 @@ import { getTransactions, approveTransaction, rejectTransaction, updateTransacti
 import { getProjectEvidence, getTransactionEvidence } from '../services/evidenceService';
 import { getLogsPorProyecto, getLogs } from '../services/logService';
 import { getUsuarios } from '../services/userService';
+import { useUserRoles } from '../hooks/useUserRoles';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -24,6 +25,10 @@ import 'react-toastify/dist/ReactToastify.css';
 const ProjectDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { canCreateTransaction, isAdminProyecto, isDirectivo, hasAnyRole, loading: loadingRoles } = useUserRoles(id);
+  
+  // Verificar si el usuario puede editar el proyecto (Admin o Directivo)
+  const canEditProject = isAdminProyecto() || isDirectivo();
 
   const [proyecto, setProyecto] = useState(null);
   const [transacciones, setTransacciones] = useState([]);
@@ -356,14 +361,16 @@ const ProjectDetails = () => {
             </nav>
           </div>
           <div className="d-flex flex-wrap gap-3 flex-shrink-0">
-            <button
-              className="btn btn-gradient-primary"
-              onClick={() => navigate(`/proyecto/${id}/editar`)}
-              title="Editar proyecto"
-            >
-              <i className="mdi mdi-pencil me-2"></i>
-              Editar
-            </button>
+            {canEditProject && !loadingRoles && (
+              <button
+                className="btn btn-gradient-primary"
+                onClick={() => navigate(`/proyecto/${id}/editar`)}
+                title="Editar proyecto"
+              >
+                <i className="mdi mdi-pencil me-2"></i>
+                Editar
+              </button>
+            )}
             <button
               className="btn btn-gradient-info"
               onClick={() => navigate(`/proyecto/${id}/equipo`)}
@@ -548,24 +555,33 @@ const ProjectDetails = () => {
                 </h4>
                 <div className="d-flex align-items-center gap-5">
                   <span className="badge badge-gradient-primary">{transacciones.length} transacciones</span>
-                  <button
-                    className="btn btn-gradient-success"
-                    onClick={() => navigate(`/registrar-gasto?proyecto=${id}`)}
-                    title="Registrar nuevo gasto"
-                  >
-                    <i className="mdi mdi-plus-circle me-2"></i>
-                    Nuevo Gasto
-                  </button>
+                  {canCreateTransaction && !loadingRoles && (
+                    <button
+                      className="btn btn-gradient-success"
+                      onClick={() => navigate(`/registrar-gasto?proyecto=${id}`)}
+                      title="Registrar nuevo gasto"
+                    >
+                      <i className="mdi mdi-plus-circle me-2"></i>
+                      Nuevo Gasto
+                    </button>
+                  )}
                 </div>
               </div>
               {transacciones.length === 0 ? (
                 <div className="text-center py-5">
                   <i className="mdi mdi-inbox fs-1 text-muted mb-3 d-block"></i>
                   <p className="text-muted mb-0">No hay transacciones registradas para este proyecto.</p>
-                  <Link to="/registrar-gasto" className="btn btn-gradient-primary mt-3">
-                    <i className="mdi mdi-plus-circle me-2"></i>
-                    Registrar Primera Transacción
-                  </Link>
+                  {canCreateTransaction && !loadingRoles ? (
+                    <Link to={`/registrar-gasto?proyecto=${id}`} className="btn btn-gradient-primary mt-3">
+                      <i className="mdi mdi-plus-circle me-2"></i>
+                      Registrar Primera Transacción
+                    </Link>
+                  ) : (
+                    <p className="text-muted mt-3">
+                      <i className="mdi mdi-information-outline me-2"></i>
+                      Solo los Ejecutores y Administradores de Proyecto pueden registrar gastos.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="table-responsive">
