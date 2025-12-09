@@ -5,6 +5,9 @@ En este módulo se incluyen todos los ViewSets para los endpoints de la API REST
 con la autenticación y autorización adecuadas configuradas.
 """
 
+import logging
+from urllib.parse import quote
+
 from django.shortcuts import render
 from django.http import FileResponse
 from rest_framework import viewsets, status
@@ -22,8 +25,11 @@ from .serializers import (ProyectoSerializer, OrganizacionSerializer,UsuarioSeri
                           PerfilUsuarioSerializer, InformeGeneradoSerializer)
 from .permissions import (IsOrganizationMember, IsAdminProyecto, IsEjecutor, 
                          IsAdminProyectoOrEjecutor, CanApproveTransaction, CanCreateTransaction,
-                         IsAdminProyectoEnOrganizacion, CanEditDeleteTransaction)
+                         IsAdminProyectoEnOrganizacion, CanEditDeleteTransaction,
+                         CanGenerateReports, CanViewReports, IsAdminProyectoOrDirectivo)
 from .utils import validar_rut_chileno, obtener_organizacion_usuario, tiene_acceso_completo, puede_crear_organizacion
+
+logger = logging.getLogger(__name__)
 
 class OrganizacionViewSet(viewsets.ModelViewSet):
     """
@@ -162,11 +168,11 @@ class ProyectoViewSet(viewsets.ModelViewSet):
         Instancia y retorna la lista de permisos que requiere esta vista.
         """
         if self.action == 'create':
-            # Solo administradores de proyecto pueden crear proyectos
+            # Solo administradores de proyecto o directivos pueden crear proyectos
             permission_classes = [IsAuthenticated, IsAdminProyectoEnOrganizacion]
         elif self.action in ['update', 'partial_update', 'destroy']:
-            # Solo administradores del proyecto específico pueden editarlo
-            permission_classes = [IsAuthenticated, IsAdminProyecto]
+            # Solo administradores de proyecto o directivos pueden editar/eliminar proyectos
+            permission_classes = [IsAuthenticated, IsAdminProyectoOrDirectivo]
         else:
             # Ver y listar: cualquier miembro de la organización
             permission_classes = [IsAuthenticated, IsOrganizationMember]
@@ -270,11 +276,6 @@ class ProyectoViewSet(viewsets.ModelViewSet):
                 'rechazadas': transacciones.filter(estado_transaccion='rechazado').count(),
             }
             
-            # Debug log
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.info(f"Pre-rendición para proyecto {proyecto.id}: errores={resultado['errores']}, advertencias={resultado['advertencias']}, valido={resultado['valido']}")
-            
             return Response(resultado, status=status.HTTP_200_OK)
         except Exception as e:
             return Response(
@@ -292,14 +293,11 @@ class ProyectoViewSet(viewsets.ModelViewSet):
         Returns:
             HttpResponse con el PDF generado
         """
-        import logging
         from django.http import HttpResponse
         from django.utils import timezone
         from rest_framework import status
         from rest_framework.response import Response
         from .reports import generar_reporte_rendicion_oficial_pdf
-        
-        logger = logging.getLogger(__name__)
         
         try:
             proyecto = self.get_object()
@@ -371,10 +369,13 @@ class ProyectoViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
-    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, IsOrganizationMember])
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, CanGenerateReports])
     def reporte_estado(self, request, pk=None):
         """
         Genera un reporte de estado del proyecto en PDF o Excel.
+        
+        Solo disponible para Administradores de Proyecto y Directivos.
+        Los Auditores pueden ver y descargar informes generados, pero no generarlos.
         
         Query params:
             formato: 'pdf' o 'excel' (default: 'pdf')
@@ -382,14 +383,11 @@ class ProyectoViewSet(viewsets.ModelViewSet):
         Returns:
             HttpResponse con el archivo generado
         """
-        import logging
         from django.http import HttpResponse
         from django.utils import timezone
         from rest_framework import status
         from rest_framework.response import Response
         from .reports import generar_reporte_estado_proyecto_pdf, generar_reporte_estado_proyecto_excel
-        
-        logger = logging.getLogger(__name__)
         
         try:
             proyecto = self.get_object()
@@ -425,10 +423,14 @@ class ProyectoViewSet(viewsets.ModelViewSet):
                 nombre_archivo = f"reporte_estado_{proyecto.id}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.{extension}"
                 contenido_archivo = buffer.getvalue()
                 
+                # Normalizar formato para cumplir con las opciones del modelo
+                # El modelo solo acepta 'pdf' o 'excel', así que normalizamos según la lógica de generación
+                formato_normalizado = 'excel' if formato == 'excel' else 'pdf'
+                
                 informe = InformeGenerado.objects.create(
                     proyecto=proyecto,
                     tipo_informe='estado',
-                    formato=formato,
+                    formato=formato_normalizado,
                     nombre_archivo=nombre_archivo,
                     generado_por=request.user,
                     descripcion=f"Reporte de estado del proyecto {proyecto.nombre_proyecto}",
@@ -1549,10 +1551,7 @@ class EvidenciaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         except Exception as e:
-            # Log del error completo para debugging
-            import traceback
-            error_traceback = traceback.format_exc()
-            print(f"Error en procesar_ocr: {error_traceback}")  # Para ver en logs de Docker
+            logger.error(f"Error en procesar_ocr: {str(e)}", exc_info=True)
             
             return Response(
                 {
@@ -1765,16 +1764,33 @@ class SubitemPresupuestarioViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        """Filtra los subítems según la organización del usuario."""
+        """
+        Filtra los subítems según la organización del usuario y el ítem presupuestario.
+        
+        Si se proporciona el parámetro 'item_presupuesto' en la query, filtra solo los subítems
+        de ese ítem específico.
+        """
+        queryset = Subitem_Presupuestario.objects.select_related('item_presupuesto', 'item_presupuesto__proyecto')
+        
+        # Filtrar por ítem presupuestario si se proporciona en la query
+        item_presupuesto_id = self.request.query_params.get('item_presupuesto', None)
+        if item_presupuesto_id:
+            try:
+                queryset = queryset.filter(item_presupuesto_id=int(item_presupuesto_id))
+            except (ValueError, TypeError):
+                # Si el ID no es válido, retornar queryset vacío
+                queryset = queryset.none()
+        
+        # Filtrar por organización del usuario
         organizacion = obtener_organizacion_usuario(self.request.user)
         if tiene_acceso_completo(self.request.user):
-            return Subitem_Presupuestario.objects.all()
+            return queryset
         elif organizacion:
-            return Subitem_Presupuestario.objects.filter(
+            return queryset.filter(
                 item_presupuesto__proyecto__id_organizacion=organizacion
             )
         else:
-            return Subitem_Presupuestario.objects.none()
+            return queryset.none()
 
 
 class DashboardViewSet(viewsets.ViewSet):
@@ -1927,14 +1943,19 @@ class InformeGeneradoViewSet(viewsets.ReadOnlyModelViewSet):
     ViewSet para gestionar informes generados.
     
     Permite listar y descargar informes generados de proyectos.
-    Solo lectura para que los usuarios puedan consultar informes sin regenerarlos.
+    Todos los roles con acceso al proyecto (Admin, Ejecutor, Directivo, Auditor)
+    pueden ver y descargar informes generados.
     """
     queryset = InformeGenerado.objects.all()
     serializer_class = InformeGeneradoSerializer
-    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    permission_classes = [IsAuthenticated, CanViewReports]
     
     def get_queryset(self):
-        """Filtra los informes según la organización del usuario y el proyecto."""
+        """
+        Filtra los informes según la organización del usuario y los proyectos donde tiene rol.
+        
+        Los usuarios solo pueden ver informes de proyectos donde tienen algún rol asignado.
+        """
         queryset = InformeGenerado.objects.select_related('proyecto', 'generado_por')
         
         # Filtrar por proyecto si se proporciona
@@ -1942,20 +1963,33 @@ class InformeGeneradoViewSet(viewsets.ReadOnlyModelViewSet):
         if proyecto_id:
             queryset = queryset.filter(proyecto_id=proyecto_id)
         
-        # Filtrar por organización del usuario
+        # Filtrar por organización del usuario y roles
         organizacion = obtener_organizacion_usuario(self.request.user)
-        if not tiene_acceso_completo(self.request.user):
-            if organizacion:
-                queryset = queryset.filter(proyecto__id_organizacion=organizacion)
-            else:
-                queryset = queryset.none()
+        if tiene_acceso_completo(self.request.user):
+            # Superusuarios sin organización ven todos los informes
+            return queryset.order_by('-fecha_generacion')
+        elif organizacion:
+            # Filtrar por organización y proyectos donde el usuario tiene algún rol
+            proyectos_con_rol = Usuario_Rol_Proyecto.objects.filter(
+                usuario=self.request.user
+            ).values_list('proyecto_id', flat=True)
+            
+            queryset = queryset.filter(
+                proyecto__id_organizacion=organizacion,
+                proyecto_id__in=proyectos_con_rol
+            )
+        else:
+            queryset = queryset.none()
         
         return queryset.order_by('-fecha_generacion')
     
-    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, IsOrganizationMember])
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, CanViewReports])
     def descargar(self, request, pk=None):
         """
         Descarga el archivo del informe generado.
+        
+        Todos los roles con acceso al proyecto pueden descargar informes generados.
+        Esto incluye Auditores, que pueden descargar pero no generar informes.
         
         Returns:
             FileResponse con el archivo del informe
@@ -1963,14 +1997,8 @@ class InformeGeneradoViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             informe = self.get_object()
             
-            # Verificar permisos de organización
-            organizacion = obtener_organizacion_usuario(request.user)
-            if not tiene_acceso_completo(request.user):
-                if informe.proyecto.id_organizacion != organizacion:
-                    return Response(
-                        {'error': 'No tiene permiso para acceder a este informe.'},
-                        status=status.HTTP_403_FORBIDDEN
-                    )
+            # CanViewReports ya verifica que el usuario tenga un rol en el proyecto
+            # No necesitamos verificar organización adicionalmente
             
             if not informe.archivo:
                 return Response(
@@ -1989,7 +2017,9 @@ class InformeGeneradoViewSet(viewsets.ReadOnlyModelViewSet):
                 content_type='application/pdf' if informe.formato == 'pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             )
             # Usar formato RFC 5987 para el nombre del archivo (mejor compatibilidad)
-            response['Content-Disposition'] = f'attachment; filename="{nombre_archivo_limpio}"; filename*=UTF-8\'\'{nombre_archivo_limpio}'
+            # El valor después de UTF-8'' debe estar percent-encoded según RFC 5987
+            nombre_archivo_encoded = quote(nombre_archivo_limpio, safe='')
+            response['Content-Disposition'] = f'attachment; filename="{nombre_archivo_limpio}"; filename*=UTF-8\'\'{nombre_archivo_encoded}'
             
             return response
         except InformeGenerado.DoesNotExist:
@@ -1998,8 +2028,6 @@ class InformeGeneradoViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Error al descargar informe {pk}: {str(e)}", exc_info=True)
             return Response(
                 {'error': f'Error al descargar el informe: {str(e)}'},

@@ -2,14 +2,37 @@
  * Sidebar component basado en el template Purple Admin
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useCanCreateProject } from '../hooks/useUserRoles';
+import { getProjects } from '../services/projectService';
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const { user } = useAuth();
+  const { canCreate } = useCanCreateProject();
   const location = useLocation();
   const [expandedMenus, setExpandedMenus] = useState({});
+  const [userHasProjects, setUserHasProjects] = useState(false);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+
+  // Verificar si el usuario tiene proyectos para determinar si puede crear transacciones
+  useEffect(() => {
+    const verificarProyectos = async () => {
+      if (user) {
+        try {
+          const proyectos = await getProjects();
+          setUserHasProjects(Array.isArray(proyectos) && proyectos.length > 0);
+        } catch (error) {
+          console.error('Error al verificar proyectos:', error);
+          setUserHasProjects(false);
+        } finally {
+          setLoadingProjects(false);
+        }
+      }
+    };
+    verificarProyectos();
+  }, [user]);
 
   const toggleMenu = (menuId) => {
     setExpandedMenus(prev => ({
@@ -18,13 +41,19 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
     }));
   };
 
+  // Determinar si el usuario puede registrar gastos
+  // Solo Ejecutor y Admin Proyecto pueden registrar gastos
+  // Por ahora, verificamos si tiene proyectos (la verificación real se hace en el backend)
+  const canRegisterExpense = userHasProjects && !loadingProjects;
+
   const menuItems = [
     {
       id: 'dashboard',
       title: 'Dashboard',
       icon: 'mdi-home',
       path: '/',
-      exact: true
+      exact: true,
+      show: true
     },
     {
       id: 'projects',
@@ -35,15 +64,18 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         {
           title: 'Crear Proyecto',
           path: '/crear-proyecto',
-          icon: 'mdi-plus-circle'
+          icon: 'mdi-plus-circle',
+          show: canCreate || user?.is_superuser || user?.usuario_principal
         }
-      ]
+      ],
+      show: true
     },
     {
       id: 'transactions',
       title: 'Transacciones',
       icon: 'mdi-cash',
-      path: '/registrar-gasto'
+      path: '/registrar-gasto',
+      show: canRegisterExpense // Solo mostrar si puede registrar gastos
     },
     {
       id: 'users',
@@ -54,11 +86,13 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         {
           title: 'Invitar Usuario',
           path: '/Invitar-usuario',
-          icon: 'mdi-account-plus'
+          icon: 'mdi-account-plus',
+          show: true // Los permisos se verifican en la página
         }
-      ]
+      ],
+      show: true
     }
-  ];
+  ].filter(item => item.show !== false);
 
   const isActive = (path, exact = false) => {
     if (exact) {
@@ -120,16 +154,18 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                   id={item.id}
                 >
                   <ul className="nav flex-column sub-menu">
-                    {item.submenu.map((subItem, index) => (
-                      <li key={index} className="nav-item">
-                        <Link 
-                          className={`nav-link ${isActive(subItem.path) ? 'active' : ''}`}
-                          to={subItem.path}
-                        >
-                          {subItem.title}
-                        </Link>
-                      </li>
-                    ))}
+                    {item.submenu
+                      .filter(subItem => subItem.show !== false)
+                      .map((subItem, index) => (
+                        <li key={index} className="nav-item">
+                          <Link 
+                            className={`nav-link ${isActive(subItem.path) ? 'active' : ''}`}
+                            to={subItem.path}
+                          >
+                            {subItem.title}
+                          </Link>
+                        </li>
+                      ))}
                   </ul>
                 </div>
               </li>

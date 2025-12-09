@@ -10,6 +10,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getDashboardMetrics, getProjects } from '../services/projectService';
+import { useCanCreateProject } from '../hooks/useUserRoles';
 import { toast, ToastContainer } from 'react-toastify';
 import {
   BarChart,
@@ -34,6 +35,7 @@ const Dashboard = () => {
   const [proyectos, setProyectos] = useState([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const { canCreate } = useCanCreateProject();
   const navigate = useNavigate();
 
   // Verificar si el usuario debe ser redirigido a crear organización
@@ -301,10 +303,12 @@ const Dashboard = () => {
                 <div className="text-center py-5">
                   <i className="bi bi-inbox fs-1 text-muted mb-3 d-block"></i>
                   <p className="text-muted mb-0">No hay proyectos disponibles</p>
-                  <Link to="/crear-proyecto" className="btn btn-primary mt-3">
-                    <i className="bi bi-plus-circle me-2"></i>
-                    Crear Primer Proyecto
-                  </Link>
+                  {(canCreate || user?.is_superuser || user?.usuario_principal) && (
+                    <Link to="/crear-proyecto" className="btn btn-primary mt-3">
+                      <i className="bi bi-plus-circle me-2"></i>
+                      Crear Primer Proyecto
+                    </Link>
+                  )}
                 </div>
               )}
             </div>

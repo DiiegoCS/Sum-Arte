@@ -149,7 +149,18 @@ const RegisterExpense = () => {
    */
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Si se cambia el ítem presupuestario, limpiar inmediatamente los subítems
+    if (name === 'item_presupuestario') {
+      setSubitemsPresupuestarios([]);
+      setFormData(prev => ({ 
+        ...prev, 
+        [name]: value,
+        subitem_presupuestario: '' // Limpiar la selección del subítem
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
 
     // Limpia el error para el campo modificado
     if (errors[name]) {
