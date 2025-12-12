@@ -252,18 +252,18 @@ class BudgetService:
         items = Item_Presupuestario.objects.filter(proyecto=proyecto)
         
         from decimal import Decimal
-        total_asignado = sum(Decimal(str(item.monto_asignado_item)) for item in items)
-        total_ejecutado = sum(Decimal(str(item.monto_ejecutado_item)) for item in items)
-        porcentaje_ejecutado = float((total_ejecutado / total_asignado * 100)) if total_asignado > 0 else 0
-        
         presupuesto_total = Decimal(str(proyecto.presupuesto_total))
         monto_ejecutado = Decimal(str(proyecto.monto_ejecutado_proyecto))
+        
+        # Calcular porcentaje directamente del presupuesto total del proyecto
+        # para mayor precisión y consistencia con los montos mostrados
+        porcentaje_ejecutado = float((monto_ejecutado / presupuesto_total * 100)) if presupuesto_total > 0 else 0
         
         return {
             'presupuesto_total': float(presupuesto_total),
             'monto_ejecutado': float(monto_ejecutado),
             'monto_disponible': float(presupuesto_total - monto_ejecutado),
-            'porcentaje_ejecutado': round(porcentaje_ejecutado, 2),
+            'porcentaje_ejecutado': porcentaje_ejecutado,
             'total_items': items.count(),
             'items_con_saldo': items.filter(
                 monto_ejecutado_item__lt=F('monto_asignado_item')

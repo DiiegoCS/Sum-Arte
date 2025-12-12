@@ -464,8 +464,8 @@ const ProjectDetails = () => {
               </h4>
               <h4 className="mb-5">
                 {metricas?.metricas_presupuesto?.porcentaje_ejecutado !== undefined
-                  ? metricas.metricas_presupuesto.porcentaje_ejecutado.toFixed(1)
-                  : '0.0'}%
+                  ? metricas.metricas_presupuesto.porcentaje_ejecutado.toFixed(2)
+                  : '0.00'}%
               </h4>
             </div>
           </div>
@@ -517,7 +517,7 @@ const ProjectDetails = () => {
                         aria-valuemax="100"
                       >
                         <span className="px-2">
-                          {(item.porcentaje_ejecutado || 0).toFixed(1)}%
+                          {(item.porcentaje_ejecutado || 0).toFixed(2)}%
                         </span>
                       </div>
                     </div>

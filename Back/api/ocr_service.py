@@ -354,7 +354,7 @@ IMPORTANTE:
             'boleta': 'boleta electronica',
             'boleta electrónica': 'boleta electronica',
             'boleta electronica': 'boleta electronica',
-            'boleta de compra': 'boleta electronica',  # Mantener compatibilidad con valor antiguo
+            'boleta de compra': 'boleta electronica',  
             'recibo': 'recibo',
             'nota de crédito': 'nota de crédito',
             'nota de debito': 'nota de débito',
