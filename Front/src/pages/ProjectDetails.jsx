@@ -366,6 +366,7 @@ const ProjectDetails = () => {
                 className="btn btn-gradient-primary"
                 onClick={() => navigate(`/proyecto/${id}/editar`)}
                 title="Editar proyecto"
+                name='editar-proyecto'
               >
                 <i className="mdi mdi-pencil me-2"></i>
                 Editar

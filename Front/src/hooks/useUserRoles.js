@@ -42,7 +42,8 @@ export const useUserRoles = (projectId) => {
       
       if (usuarioEnEquipo) {
         // Extraer los nombres de los roles
-        const nombresRoles = usuarioEnEquipo.roles?.map(rol => rol.nombre_rol) || [];
+        // El backend devuelve roles como [{id: X, nombre: 'admin proyecto'}, ...]
+        const nombresRoles = usuarioEnEquipo.roles?.map(rol => rol.nombre || rol.nombre_rol) || [];
         setRoles(nombresRoles);
       } else {
         setRoles([]);
