@@ -1,0 +1,33 @@
+{
+  "admin": {
+    "username": "Claudia_Perez",
+    "password": "Cperezfcu1",
+    "email": "c.perez@fcultura.cl",
+    "role": "admin proyecto"
+  },
+  "ejecutor": {
+    "username": "Carlos_Tapia",
+    "password": "Ctapiafcu2",
+    "email": "c.tapia@fcultura.cl",
+    "role": "ejecutor"
+  },
+  "auditor": {
+    "username": "Roberto_Diaz",
+    "password": "Rdiazfcu5",
+    "email": "r.diaz@fin-org.cl",
+    "role": "auditor"
+  },
+  "directivo": {
+    "username": "Romina_Andrade",
+    "password": "q1W2E3r458",
+    "email": "r.andrade@fcultura.cl",
+    "role": "directivo"
+  },
+  "superuser": {
+    "username": "adminTest",
+    "password": "adminteste123",
+    "email": "superuser@sumarte.cl",
+    "role": "superuser"
+  }
+}
+
