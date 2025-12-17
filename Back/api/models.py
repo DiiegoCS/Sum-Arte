@@ -672,9 +672,12 @@ class Subitem_Presupuestario(models.Model):
         Returns:
             float: Porcentaje ejecutado (0-100)
         """
-        if self.monto_asignado_subitem == 0:
+        from decimal import Decimal
+        monto_asignado = Decimal(str(self.monto_asignado_subitem))
+        monto_ejecutado = Decimal(str(self.monto_ejecutado_subitem))
+        if monto_asignado == 0:
             return 0.0
-        return float((self.monto_ejecutado_subitem / self.monto_asignado_subitem) * 100)
+        return float((monto_ejecutado / monto_asignado) * 100)
 
 
 ### --- Modelo para almacenamiento de informes generados ---

@@ -22,8 +22,8 @@ export const getTransactions = async (filters = {}) => {
   });
   
   const response = await api.get(`/transacciones/?${params.toString()}`);
-  // La API devuelve datos paginados, extraemos el array de results
-  return response.data.results || response.data;
+  // La API puede devolver datos paginados (count, next, previous, results) o un arreglo.
+  return response.data;
 };
 
 /**

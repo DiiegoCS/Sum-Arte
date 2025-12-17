@@ -14,6 +14,7 @@ from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 from .models import (Proyecto, Organizacion, Usuario, Rol, Usuario_Rol_Proyecto, Proveedor, Transaccion,
                      Item_Presupuestario, Subitem_Presupuestario, Evidencia, Transaccion_Evidencia, Log_transaccion,
                      InvitacionUsuario, InformeGenerado)
@@ -30,6 +31,16 @@ from .permissions import (IsOrganizationMember, IsAdminProyecto, IsEjecutor,
 from .utils import validar_rut_chileno, obtener_organizacion_usuario, tiene_acceso_completo, puede_crear_organizacion
 
 logger = logging.getLogger(__name__)
+
+
+class StandardResultsSetPagination(PageNumberPagination):
+    """
+    Clase de paginación personalizada que permite controlar el tamaño de página.
+    """
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
 
 class OrganizacionViewSet(viewsets.ModelViewSet):
     """
@@ -1042,6 +1053,7 @@ class TransaccionViewSet(viewsets.ModelViewSet):
     queryset = Transaccion.objects.all()
     serializer_class = TransaccionSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
     filterset_fields = ['proyecto', 'estado_transaccion', 'tipo_transaccion', 'proveedor']
     search_fields = ['nro_documento', 'proveedor__nombre_proveedor']
     ordering_fields = ['fecha_registro', 'fecha_creacion', 'monto_transaccion']
@@ -1072,7 +1084,7 @@ class TransaccionViewSet(viewsets.ModelViewSet):
         ).prefetch_related(
             'transaccion_evidencia_set__evidencia',
             'log_transaccion_set__usuario'
-        )
+        ).order_by('-fecha_registro')  # Ordenamiento explícito para paginación consistente
         
         organizacion = obtener_organizacion_usuario(self.request.user)
         if tiene_acceso_completo(self.request.user):
@@ -1087,6 +1099,7 @@ class TransaccionViewSet(viewsets.ModelViewSet):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
+    
     
     def create(self, request, *args, **kwargs):
         """
@@ -1121,26 +1134,35 @@ class TransaccionViewSet(viewsets.ModelViewSet):
         """
         Actualiza una transacción.
         
+        Permite actualizar transacciones en cualquier estado.
+        Si la transacción está aprobada, se revierten los montos ejecutados
+        y se cambia el estado a 'pendiente' para requerir nueva aprobación.
+        
         Solo permite actualizar si:
         - El usuario es Administrador de Proyecto
-        - La transacción está en estado 'pendiente'
-        - El proyecto no está bloqueado
+        - El proyecto no está bloqueado (solo para transacciones aprobadas)
         """
         from rest_framework.response import Response
         from rest_framework import status
         from .validators import validar_proyecto_no_bloqueado, validar_duplicidad
         from .exceptions import ProyectoBloqueadoException, TransaccionDuplicadaException
+        from .services import BudgetService
+        from .models import ESTADO_TRANSACCION_PENDIENTE, Log_transaccion, ACCION_LOG_MODIFICACION
+        from django.db import transaction as db_transaction
         
         instance = self.get_object()
         
-        # Verifica si la transacción puede ser editada
-        if not instance.puede_editar():
-            return Response(
-                {'error': 'No se puede modificar una transacción que ya ha sido aprobada o rechazada.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # Si la transacción está aprobada, verificar que el proyecto no esté bloqueado
+        if instance.estado_transaccion == 'aprobado':
+            try:
+                validar_proyecto_no_bloqueado(instance.proyecto)
+            except ProyectoBloqueadoException as e:
+                return Response(
+                    {'error': f'No se puede editar una transacción aprobada de un proyecto bloqueado: {str(e)}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         
-        # Verifica que el proyecto no esté bloqueado
+        # Verifica que el proyecto no esté bloqueado (para todos los casos)
         try:
             validar_proyecto_no_bloqueado(instance.proyecto)
         except ProyectoBloqueadoException as e:
@@ -1177,8 +1199,42 @@ class TransaccionViewSet(viewsets.ModelViewSet):
                 )
         
         try:
-            self.perform_update(serializer)
-            return Response(serializer.data)
+            with db_transaction.atomic():
+                # Guardar el estado original antes de actualizar
+                estado_original = instance.estado_transaccion
+                estaba_aprobada = estado_original == 'aprobado'
+                
+                # Si la transacción estaba aprobada, revertir los montos ejecutados ANTES de actualizar
+                if estaba_aprobada:
+                    BudgetService.revertir_montos_ejecutados(instance)
+                
+                # Actualizar la transacción con los nuevos datos
+                self.perform_update(serializer)
+                
+                # Refrescar la instancia para obtener los valores actualizados
+                instance.refresh_from_db()
+                
+                # Si estaba aprobada o rechazada, cambiar el estado a pendiente
+                if estado_original in ['aprobado', 'rechazado']:
+                    instance.estado_transaccion = ESTADO_TRANSACCION_PENDIENTE
+                    instance.usuario_aprobador = None
+                    instance.fecha_aprobacion = None
+                    instance.save()
+                
+                # Registrar log de modificación
+                Log_transaccion.objects.create(
+                    transaccion=instance,
+                    usuario=request.user,
+                    accion_realizada=ACCION_LOG_MODIFICACION
+                )
+                
+                # Refrescar nuevamente para obtener el estado actualizado
+                instance.refresh_from_db()
+                
+                # Serializar la respuesta con el estado actualizado
+                response_serializer = self.get_serializer(instance)
+                
+            return Response(response_serializer.data)
         except Exception as e:
             return Response(
                 {'error': str(e)},
@@ -1625,6 +1681,9 @@ class TransaccionEvidenciaViewSet(viewsets.ModelViewSet):
     queryset = Transaccion_Evidencia.objects.all()
     serializer_class = TransaccionEvidenciaSerializer
     permission_classes = [IsAuthenticated]
+    filterset_fields = ['transaccion', 'evidencia']
+    ordering_fields = ['id']
+    ordering = ['-id']
 
 
 class LogTransaccionViewSet(viewsets.ReadOnlyModelViewSet):
@@ -1637,6 +1696,7 @@ class LogTransaccionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Log_transaccion.objects.all()
     serializer_class = LogTransaccionSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
     filterset_fields = ['transaccion', 'usuario', 'accion_realizada']
     ordering_fields = ['fecha_hora_accion']
     ordering = ['-fecha_hora_accion']  # Más recientes primero
@@ -1653,7 +1713,7 @@ class LogTransaccionViewSet(viewsets.ReadOnlyModelViewSet):
         """
         queryset = Log_transaccion.objects.select_related(
             'transaccion', 'usuario', 'transaccion__proyecto'
-        )
+        ).order_by('-fecha_hora_accion')  # Ordenamiento explícito para paginación consistente
         
         organizacion = obtener_organizacion_usuario(self.request.user)
         if tiene_acceso_completo(self.request.user):

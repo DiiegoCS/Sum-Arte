@@ -148,7 +148,7 @@ const PreRendicion = () => {
       {/* Page Header estilo template */}
       <div className="container">
         <div className="d-flex justify-content-between align-items-start flex-nowrap mb-2 flex-column flex-md-row gap-3">
-          <div className="flex-grow-1" style={{ minWidth: '20rem' }}>
+          <div className="flex-grow-1" style={{ minWidth: '23rem' }}>
             <h3 className="page-title mb-0" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               <span className="page-title-icon bg-gradient-primary text-white me-2">
                 <i className="mdi mdi-file-check"></i>

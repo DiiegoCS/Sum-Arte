@@ -245,10 +245,9 @@ class BudgetServiceTest(TestCase):
         self.assertEqual(metricas['presupuesto_total'], 1000000.0)
         self.assertEqual(metricas['monto_ejecutado'], 200000.0)
         self.assertEqual(metricas['monto_disponible'], 800000.0)
-        # El porcentaje se calcula sobre el total de items asignados, no del presupuesto total del proyecto
-        # Si solo hay un item con 500000 asignado y 200000 ejecutado, el porcentaje es 40%
-        # (200000 / 500000 * 100 = 40%)
-        self.assertEqual(metricas['porcentaje_ejecutado'], 40.0)
+        # El porcentaje se calcula sobre el presupuesto total del proyecto
+        # (200000 / 1000000 * 100 = 20%)
+        self.assertEqual(metricas['porcentaje_ejecutado'], 20.0)
 
 
 class RenditionServiceTest(TestCase):

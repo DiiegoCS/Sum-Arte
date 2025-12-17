@@ -56,7 +56,7 @@ Ejecuta todos los tests y genera un reporte HTML consolidado en `cypress/reports
 ### Variables de Entorno
 
 El archivo `cypress.config.js` está configurado para usar:
-- **baseUrl**: `http://localhost:5173` (puerto por defecto de Vite)
+- **baseUrl**: `http://localhost:3000` (puerto definido en el proyecto, por defecto el puerto de Vite es 5173)
 
 Si tu aplicación corre en otro puerto, actualiza `baseUrl` en `cypress.config.js`.
 

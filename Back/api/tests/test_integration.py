@@ -704,7 +704,7 @@ class FlujoPresupuestoCompletoTest(TestCase):
         self.assertEqual(metricas['presupuesto_total'], 1000000.0)
         self.assertEqual(metricas['monto_ejecutado'], 350000.0)
         self.assertEqual(metricas['monto_disponible'], 650000.0)
-        # Porcentaje: (150000 + 200000) / (400000 + 300000) * 100 = 350000 / 700000 * 100 = 50%
-        self.assertEqual(metricas['porcentaje_ejecutado'], 50.0)
+        # Porcentaje: monto_ejecutado_proyecto / presupuesto_total * 100 = 350000 / 1000000 * 100 = 35%
+        self.assertEqual(metricas['porcentaje_ejecutado'], 35.0)
         self.assertEqual(metricas['total_items'], 2)
 
