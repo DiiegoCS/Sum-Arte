@@ -47,11 +47,29 @@ export const getLogsPorTransaccion = async (transaccionId) => {
  * Obtiene los logs de un proyecto específico.
  * 
  * @param {number} proyectoId - ID del proyecto
- * @returns {Promise<Array>} Devuelve una lista de logs del proyecto
+ * @param {number} page - Número de página (opcional)
+ * @param {number} pageSize - Tamaño de página (opcional)
+ * @param {Object} filters - Filtros adicionales (usuario, accion_realizada, ordenFecha)
+ * @returns {Promise<Object>} Devuelve objeto con results, count, next, previous
  */
-export const getLogsPorProyecto = async (proyectoId) => {
-  const response = await api.get(`/logs-transacciones/?proyecto=${proyectoId}`);
-  // La API devuelve datos paginados, extraemos el array de results
-  return response.data.results || response.data;
+export const getLogsPorProyecto = async (proyectoId, page = null, pageSize = null, filters = {}) => {
+  const params = new URLSearchParams();
+  params.append('proyecto', proyectoId);
+  
+  if (page !== null) params.append('page', page);
+  if (pageSize !== null) params.append('page_size', pageSize);
+  if (filters.usuario) params.append('usuario', filters.usuario);
+  if (filters.accion_realizada) params.append('accion_realizada', filters.accion_realizada);
+  
+  // Ordenamiento: DRF usa el parámetro 'ordering' con el nombre del campo
+  // Prefijo '-' para orden descendente, sin prefijo para ascendente
+  if (filters.ordenFecha) {
+    const ordering = filters.ordenFecha === 'asc' ? 'fecha_hora_accion' : '-fecha_hora_accion';
+    params.append('ordering', ordering);
+  }
+  
+  const response = await api.get(`/logs-transacciones/?${params.toString()}`);
+  // La API devuelve datos paginados
+  return response.data;
 };
 

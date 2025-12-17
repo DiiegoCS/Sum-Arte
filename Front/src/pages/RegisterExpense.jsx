@@ -109,6 +109,70 @@ const RegisterExpense = () => {
   };
 
   /**
+   * Carga los datos de una transacción para edición.
+   * @param {string} transaccionId - ID de la transacción a editar
+   */
+  const cargarTransaccionParaEditar = async (transaccionId) => {
+    try {
+      setCargandoTransaccion(true);
+      setModoEdicion(true);
+      
+      const transaccion = await getTransaction(parseInt(transaccionId));
+      
+      // Los campos relacionados pueden venir como IDs (números) o como objetos
+      const proyectoId = typeof transaccion.proyecto === 'object' 
+        ? transaccion.proyecto.id 
+        : transaccion.proyecto;
+      const proveedorId = typeof transaccion.proveedor === 'object' 
+        ? transaccion.proveedor.id 
+        : transaccion.proveedor;
+      const itemId = typeof transaccion.item_presupuestario === 'object' 
+        ? transaccion.item_presupuestario?.id 
+        : transaccion.item_presupuestario;
+      const subitemId = typeof transaccion.subitem_presupuestario === 'object' 
+        ? transaccion.subitem_presupuestario?.id 
+        : transaccion.subitem_presupuestario;
+      
+      // Cargar los datos de la transacción en el formulario
+      setFormData({
+        proyecto: proyectoId?.toString() || '',
+        proveedor: proveedorId?.toString() || '',
+        nuevo_proveedor_nombre: '',
+        nuevo_proveedor_rut: '',
+        nuevo_proveedor_email: '',
+        monto_transaccion: transaccion.monto_transaccion?.toString() || '',
+        fecha_registro: transaccion.fecha_registro || new Date().toISOString().split('T')[0],
+        nro_documento: transaccion.nro_documento || '',
+        tipo_doc_transaccion: transaccion.tipo_doc_transaccion || 'factura electrónica',
+        tipo_transaccion: transaccion.tipo_transaccion || 'egreso',
+        item_presupuestario: itemId?.toString() || '',
+        subitem_presupuestario: subitemId?.toString() || '',
+        categoria_gasto: transaccion.categoria_gasto || '',
+        numero_cuenta_bancaria: transaccion.numero_cuenta_bancaria || '',
+        numero_operacion_bancaria: transaccion.numero_operacion_bancaria || '',
+      });
+
+      // Cargar ítems y subítems si hay proyecto
+      if (proyectoId) {
+        await cargarItemsPresupuestarios(proyectoId.toString());
+        
+        // Si hay ítem presupuestario, cargar subítems
+        if (itemId) {
+          await cargarSubitems(itemId.toString());
+        }
+      }
+      
+      toast.success('Transacción cargada para edición');
+    } catch (error) {
+      console.error('Error al cargar transacción para edición:', error);
+      toast.error(error.response?.data?.error || 'Error al cargar la transacción para edición');
+      navigate('/');
+    } finally {
+      setCargandoTransaccion(false);
+    }
+  };
+
+  /**
    * Carga los ítems presupuestarios asociados al proyecto seleccionado.
    * @param {string} proyectoId
    */
@@ -150,8 +214,14 @@ const RegisterExpense = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     
+    // Validación especial para número de documento: solo números
+    if (name === 'nro_documento') {
+      // Solo permitir números (eliminar cualquier carácter que no sea dígito)
+      const soloNumeros = value.replace(/\D/g, '');
+      setFormData(prev => ({ ...prev, [name]: soloNumeros }));
+    }
     // Si se cambia el ítem presupuestario, limpiar inmediatamente los subítems
-    if (name === 'item_presupuestario') {
+    else if (name === 'item_presupuestario') {
       setSubitemsPresupuestarios([]);
       setFormData(prev => ({ 
         ...prev, 
@@ -629,8 +699,17 @@ const RegisterExpense = () => {
                       name="nro_documento"
                       value={formData.nro_documento}
                       onChange={handleChange}
+                      pattern="[0-9]*"
+                      inputMode="numeric"
+                      placeholder="Solo números"
                       required
                     />
+                    {errors.nro_documento && (
+                      <div className="invalid-feedback">{errors.nro_documento}</div>
+                    )}
+                    <small className="form-text text-muted">
+                      Solo se permiten números
+                    </small>
                   </div>
                   <div className="col-md-6">
                     <label htmlFor="tipo_doc_transaccion" className="form-label">

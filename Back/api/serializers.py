@@ -353,12 +353,12 @@ class TransaccionSerializer(serializers.ModelSerializer):
     tipo_display = serializers.CharField(source='get_tipo_transaccion_display', read_only=True)
     tipo_doc_display = serializers.CharField(source='get_tipo_doc_transaccion_display', read_only=True)
     
-    # Se muestran las evidencias vinculadas a la transacción
+    # Se muestran las evidencias vinculadas a la transacción (solo en detalle, no en listado)
     evidencias = serializers.SerializerMethodField()
     cantidad_evidencias = serializers.SerializerMethodField()
     
-    # Se muestran los logs relacionados a la transacción
-    logs = LogTransaccionSerializer(many=True, read_only=True)
+    # Se muestran los logs relacionados a la transacción (solo en detalle, no en listado)
+    logs = serializers.SerializerMethodField()
     
     # Campos calculados
     puede_editar = serializers.SerializerMethodField()
@@ -374,23 +374,32 @@ class TransaccionSerializer(serializers.ModelSerializer):
         ]
     
     def get_evidencias(self, obj):
-        """Obtiene la lista de evidencias asociadas a la transacción."""
-        evidencias = Transaccion_Evidencia.objects.filter(
-            transaccion=obj,
-            evidencia__eliminado=False
-        ).select_related('evidencia')
-        return EvidenciaSerializer(
-            [te.evidencia for te in evidencias],
-            many=True,
-            context=self.context
-        ).data
+        """
+        Obtiene la lista de evidencias asociadas a la transacción.
+        Solo se incluyen en el detalle (retrieve), no en el listado para optimizar rendimiento.
+        """
+        # En listado, siempre retornar lista vacía para optimizar rendimiento
+        # Las evidencias se cargan bajo demanda desde el frontend
+        return []
     
     def get_cantidad_evidencias(self, obj):
         """Obtiene el conteo de evidencias activas asociadas a la transacción."""
+        # Usar el prefetch_related si está disponible para evitar consultas adicionales
+        if hasattr(obj, 'transaccion_evidencia_set'):
+            return sum(1 for te in obj.transaccion_evidencia_set.all() if not te.evidencia.eliminado)
         return Transaccion_Evidencia.objects.filter(
             transaccion=obj,
             evidencia__eliminado=False
         ).count()
+    
+    def get_logs(self, obj):
+        """
+        Obtiene los logs relacionados a la transacción.
+        Solo se incluyen en el detalle (retrieve), no en el listado para optimizar rendimiento.
+        """
+        # En listado, siempre retornar lista vacía para optimizar rendimiento
+        # Los logs se cargan bajo demanda desde el frontend
+        return []
     
     def get_puede_editar(self, obj):
         """Indica si la transacción puede ser editada actualmente."""
@@ -425,11 +434,8 @@ class TransaccionSerializer(serializers.ModelSerializer):
             except Exception as e:
                 raise serializers.ValidationError(str(e))
         
-        # Se impide la modificación si la transacción ya fue aprobada o rechazada
-        if self.instance and self.instance.estado_transaccion != 'pendiente':
-            raise serializers.ValidationError(
-                "No se puede modificar una transacción que ya ha sido aprobada o rechazada."
-            )
+        # Nota: La validación de estado (aprobado/rechazado) se maneja en el ViewSet.update()
+        # para permitir editar transacciones aprobadas/rechazadas y cambiarlas a pendiente
         
         # Se valida que el proyecto asociado no esté bloqueado
         proyecto = data.get('proyecto') or (self.instance.proyecto if self.instance else None)

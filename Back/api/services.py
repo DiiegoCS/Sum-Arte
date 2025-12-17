@@ -239,6 +239,45 @@ class BudgetService:
         proyecto.save()
     
     @staticmethod
+    @db_transaction.atomic
+    def revertir_montos_ejecutados(transaccion):
+        """
+        Revierte los montos ejecutados del presupuesto cuando se edita o elimina una transacción aprobada.
+        
+        Args:
+            transaccion: Transacción aprobada que se va a revertir
+        """
+        monto = transaccion.monto_transaccion
+        
+        from decimal import Decimal
+        # Asegurar que monto sea Decimal
+        monto_decimal = Decimal(str(monto))
+        
+        # Se revierte el subítem si existe
+        if transaccion.subitem_presupuestario:
+            subitem = transaccion.subitem_presupuestario
+            subitem.monto_ejecutado_subitem = Decimal(str(subitem.monto_ejecutado_subitem)) - monto_decimal
+            subitem.save()
+            
+            # Se revierte el ítem padre
+            item = subitem.item_presupuesto
+            item.monto_ejecutado_item = Decimal(str(item.monto_ejecutado_item)) - monto_decimal
+            item.save()
+        elif transaccion.item_presupuestario:
+            # Se revierte sólo el ítem
+            item = transaccion.item_presupuestario
+            item.monto_ejecutado_item = Decimal(str(item.monto_ejecutado_item)) - monto_decimal
+            item.save()
+        
+        # Se revierte el monto ejecutado del proyecto
+        proyecto = transaccion.proyecto
+        if transaccion.tipo_transaccion == 'egreso':
+            proyecto.monto_ejecutado_proyecto = Decimal(str(proyecto.monto_ejecutado_proyecto)) - monto_decimal
+        else:  # Si es ingreso
+            proyecto.presupuesto_total = Decimal(str(proyecto.presupuesto_total)) - monto_decimal
+        proyecto.save()
+    
+    @staticmethod
     def calcular_metricas_presupuesto(proyecto):
         """
         Calcula métricas del presupuesto del proyecto.
